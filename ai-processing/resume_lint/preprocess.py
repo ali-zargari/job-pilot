@@ -4,6 +4,48 @@ from . import rules
 # Load the English NLP model
 nlp = spacy.load("en_core_web_sm")
 
+def preprocess_text(text):
+    """
+    Preprocess the resume text to clean it up and prepare for analysis.
+    
+    Args:
+        text (str): The raw resume text
+        
+    Returns:
+        str: Cleaned and normalized text
+    """
+    # Remove extra whitespace
+    text = ' '.join(text.split())
+    
+    # Basic text normalization
+    text = text.replace('\t', ' ')
+    
+    return text
+
+def extract_bullet_points(text):
+    """
+    Extract bullet points from resume text.
+    
+    Args:
+        text (str): The resume text
+        
+    Returns:
+        list: List of bullet point strings
+    """
+    lines = text.split('\n')
+    bullets = []
+    
+    for line in lines:
+        line = line.strip()
+        # Check for common bullet characters
+        if line.startswith('•') or line.startswith('-') or line.startswith('*'):
+            bullets.append(line)
+        # Check for numbered bullets
+        elif len(line) > 2 and line[0].isdigit() and line[1] in ['.', ')']:
+            bullets.append(line)
+            
+    return bullets
+
 class ResumeAnalyzer:
     """
     A class to analyze resumes and provide feedback on improvements.
@@ -25,6 +67,9 @@ class ResumeAnalyzer:
         Returns:
             dict: A dictionary containing score and list of issues
         """
+        # First preprocess the text
+        resume_text = preprocess_text(resume_text)
+        
         doc = self.nlp(resume_text)
         issues = []
         score = 100  # Start with a perfect score
@@ -92,6 +137,17 @@ class ResumeAnalyzer:
                     "text": sentence_text
                 })
                 score -= 2
+        
+        # Add analysis for bullet points
+        bullets = extract_bullet_points(resume_text)
+        if not bullets:
+            issues.append({
+                "severity": "high",
+                "type": "format",
+                "message": "❌ Your resume doesn't have bullet points. Add bullet points for better readability.",
+                "text": resume_text[:100] + "..."
+            })
+            score -= 10
         
         # Final feedback based on score
         feedback = ""
