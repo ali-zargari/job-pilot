@@ -3,6 +3,8 @@ Resume matching module using embeddings.
 Compares resumes against job descriptions and reference resumes.
 """
 
+import logging
+import os
 import numpy as np
 from typing import List, Dict, Optional, Tuple
 import logging
@@ -19,30 +21,34 @@ logger = logging.getLogger(__name__)
 
 class ResumeMatcher:
     """
-    Class for matching resumes using embeddings.
+    Matches resumes with job descriptions and reference resumes.
+    Uses embeddings and keyword matching.
     """
     
     def __init__(
         self,
         openai_api_key: Optional[str] = None,
+        similarity_threshold: float = 0.7,
         embedding_model: str = "text-embedding-ada-002",
-        similarity_threshold: float = 0.75
+        use_embeddings: bool = True
     ):
         """
         Initialize the resume matcher.
         
         Args:
             openai_api_key: OpenAI API key for embeddings
+            similarity_threshold: Threshold for good matching
             embedding_model: Model to use for embeddings
-            similarity_threshold: Threshold for considering matches
+            use_embeddings: Whether to use embedding-based matching (vs keywords only)
         """
         self.openai_api_key = openai_api_key
         self.client = None
         if openai_api_key:
             self.client = OpenAI(api_key=openai_api_key)
             
-        self.embedding_model = embedding_model
         self.similarity_threshold = similarity_threshold
+        self.embedding_model = embedding_model
+        self.use_embeddings = use_embeddings
         
     def get_embedding(self, text: str) -> List[float]:
         """
@@ -84,69 +90,43 @@ class ResumeMatcher:
         
         return float(cosine_similarity(e1, e2)[0][0])
         
-    def match_resume(
-        self,
-        resume_text: str,
-        job_description: Optional[str] = None,
-        reference_resumes: Optional[List[str]] = None
-    ) -> Dict:
+    def match_resume(self, resume_text, job_description):
         """
-        Match a resume against a job description and reference resumes.
+        Match a resume against a job description.
         
         Args:
-            resume_text: Resume text to match
-            job_description: Job description to match against
-            reference_resumes: List of successful reference resumes
+            resume_text: The resume text
+            job_description: The job description
             
         Returns:
-            Dictionary with match results
+            float: Match score between 0-1
         """
-        # Get resume embedding
-        resume_embedding = self.get_embedding(resume_text)
-        
-        results = {
-            "overall_match": 0.0,
-            "job_match": None,
-            "reference_matches": [],
-            "missing_keywords": []
-        }
-        
-        # Match against job description
-        if job_description:
-            job_embedding = self.get_embedding(job_description)
-            job_similarity = self.calculate_similarity(resume_embedding, job_embedding)
-            
-            results["job_match"] = {
-                "score": job_similarity,
-                "is_good_match": job_similarity >= self.similarity_threshold
-            }
-            
-            # Extract missing keywords if match is low
-            if job_similarity < self.similarity_threshold:
-                # TODO: Implement keyword extraction and comparison
-                pass
+        try:
+            if self.use_embeddings and self.client:
+                # Get embeddings
+                resume_embedding = self.get_embedding(resume_text)
+                job_embedding = self.get_embedding(job_description)
                 
-        # Match against reference resumes
-        if reference_resumes:
-            for ref_resume in reference_resumes:
-                ref_embedding = self.get_embedding(ref_resume)
-                similarity = self.calculate_similarity(resume_embedding, ref_embedding)
+                # Calculate cosine similarity
+                similarity = self.cosine_similarity(resume_embedding, job_embedding)
                 
-                results["reference_matches"].append({
-                    "score": similarity,
-                    "is_good_match": similarity >= self.similarity_threshold
-                })
+                # Convert to percentage
+                match_percent = 0.5 + (similarity * 0.5)  # Scale from -1,1 to 0,1 with midpoint bias
                 
-        # Calculate overall match score
-        scores = []
-        if results["job_match"]:
-            scores.append(results["job_match"]["score"])
-        scores.extend([m["score"] for m in results["reference_matches"]])
-        
-        if scores:
-            results["overall_match"] = sum(scores) / len(scores)
-            
-        return results
+                return match_percent  # Return as a float between 0-1
+            else:
+                # Fall back to simple keyword matching
+                job_keywords = self.extract_keywords(job_description)
+                resume_keywords = self.extract_keywords(resume_text)
+                
+                # Calculate matches
+                matches = set(job_keywords) & set(resume_keywords)
+                match_percent = len(matches) / max(len(job_keywords), 1)
+                
+                return match_percent  # Return as a float between 0-1
+        except Exception as e:
+            logger.error(f"Error matching resume: {str(e)}")
+            return 0.5  # Default to middle score on error
         
     def find_best_matches(
         self,
@@ -184,6 +164,118 @@ class ResumeMatcher:
         # Sort by match score and get top k
         matches.sort(key=lambda x: x["match_score"], reverse=True)
         return matches[:top_k]
+
+    def extract_keywords(self, text):
+        """
+        Extract important keywords from text.
+        
+        Args:
+            text: Text to extract keywords from
+            
+        Returns:
+            List of keywords
+        """
+        if not text:
+            return []
+            
+        # Remove common stop words
+        stop_words = {
+            "a", "an", "the", "and", "or", "but", "is", "are", "was", "were", "be", "been", "being",
+            "in", "on", "at", "to", "for", "with", "by", "about", "against", "between", "into", "through",
+            "during", "before", "after", "above", "below", "from", "up", "down", "of", "off", "over", "under",
+            "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", "any",
+            "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own",
+            "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", "don't", "should",
+            "now", "d", "ll", "m", "o", "re", "ve", "y", "ain", "aren", "couldn", "didn", "doesn", "hadn",
+            "hasn", "haven", "isn", "ma", "mightn", "mustn", "needn", "shan", "shouldn", "wasn", "weren",
+            "won", "wouldn", "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your",
+            "yours", "yourself", "yourselves", "he", "him", "his", "himself", "she", "her", "hers", "herself",
+            "it", "its", "itself", "they", "them", "their", "theirs", "themselves", "this", "that", "these",
+            "those", "am", "have", "has", "had", "do", "does", "did", "doing", "would", "should", "could",
+            "ought", "i'm", "you're", "he's", "she's", "it's", "we're", "they're", "i've", "you've", "we've",
+            "they've", "i'd", "you'd", "he'd", "she'd", "we'd", "they'd", "i'll", "you'll", "he'll", "she'll",
+            "we'll", "they'll", "isn't", "aren't", "wasn't", "weren't", "hasn't", "haven't", "hadn't", "doesn't",
+            "don't", "didn't", "won't", "wouldn't", "shan't", "shouldn't", "can't", "cannot", "couldn't", "mustn't",
+            "let's", "that's", "who's", "what's", "here's", "there's", "when's", "where's", "why's", "how's"
+        }
+        
+        # Normalize text
+        text = text.lower()
+        text = ''.join([c if c.isalnum() or c.isspace() else ' ' for c in text])
+        
+        # Split and filter
+        words = text.split()
+        keywords = [word for word in words if word not in stop_words and len(word) > 2]
+        
+        # Extract tech stack
+        try:
+            from resume_gpt import extract_tech_stack
+            tech_stack = extract_tech_stack(text)
+            if tech_stack:
+                keywords.extend([tech.lower() for tech in tech_stack])
+        except ImportError:
+            pass
+        
+        # Remove duplicates but preserve order
+        seen = set()
+        keywords = [x for x in keywords if not (x in seen or seen.add(x))]
+        
+        return keywords
+
+    def cosine_similarity(self, vec1, vec2):
+        """
+        Calculate cosine similarity between two vectors.
+        
+        Args:
+            vec1: First vector
+            vec2: Second vector
+            
+        Returns:
+            float: Cosine similarity score
+        """
+        # Ensure vectors are numpy arrays
+        vec1 = np.array(vec1)
+        vec2 = np.array(vec2)
+        
+        # Calculate cosine similarity
+        dot_product = np.dot(vec1, vec2)
+        norm_vec1 = np.linalg.norm(vec1)
+        norm_vec2 = np.linalg.norm(vec2)
+        
+        # Avoid division by zero
+        if norm_vec1 == 0 or norm_vec2 == 0:
+            return 0
+            
+        return dot_product / (norm_vec1 * norm_vec2)
+
+def extract_resume_bullets(resume_text):
+    """
+    Extract bullet points from a resume
+    
+    Args:
+        resume_text (str): The resume text
+    
+    Returns:
+        list: List of bullet points
+    """
+    bullets = []
+    
+    # Split the resume into lines
+    lines = resume_text.split('\n')
+    
+    # Process each line
+    for line in lines:
+        line = line.strip()
+        
+        # Check if this line starts with a bullet character
+        if line.startswith(('•', '-', '*', '>', '+', '→', '▪', '▫', '◦', '◆', '◇', '○', '◎', '◉')):
+            bullets.append(line)
+        
+        # Check for numbered bullets
+        elif len(line) >= 2 and line[0].isdigit() and line[1] in ['.', ')', ']']:
+            bullets.append(line)
+    
+    return bullets
 
 # Create singleton instance
 matcher = None
