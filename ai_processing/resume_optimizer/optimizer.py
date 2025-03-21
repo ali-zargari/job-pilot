@@ -264,14 +264,19 @@ class ResumeOptimizer:
                 "message": "Your resume is already well-optimized! It has strong action verbs, quantifiable achievements, and proper formatting."
             }
         
-        # Phase 1: Rule-based optimization (always run this)
-        # Apply targeted improvements with rule-based processing
-        rule_based_text = self._add_quantifiable_achievements(resume_text, bullets_needing_metrics, job_description)
-        
-        # Final check to ensure we have actually improved the resume with metrics
-        if not self._contains_metrics(rule_based_text):
-            # Last resort: add explicit metrics placeholders
-            rule_based_text = self._force_add_metrics(rule_based_text)
+        # Phase 1: Rule-based optimization with only basic improvements
+        # Apply rule-based processing differently based on whether AI rewrite will be used
+        if apply_ai_rewrite:
+            # If AI rewrite will be used, only make basic improvements without adding metrics
+            rule_based_text = self._apply_basic_improvements(resume_text)
+        else:
+            # Full rule-based optimization including metrics
+            rule_based_text = self._add_quantifiable_achievements(resume_text, bullets_needing_metrics, job_description)
+            
+            # Final check to ensure we have actually improved the resume with metrics
+            if not self._contains_metrics(rule_based_text):
+                # Last resort: add explicit metrics placeholders
+                rule_based_text = self._force_add_metrics(rule_based_text)
         
         # Analysis after rule-based improvements
         rule_based_analysis = analyze_resume(rule_based_text)
@@ -926,11 +931,32 @@ class ResumeOptimizer:
         job_context = f"Job Description:\n{job_description}\n\n" if job_description else ""
         tech_context = f"Original Skills & Technologies: {', '.join(original_tech_stack)}\n\n" if original_tech_stack else ""
         
+        # Extract any existing metrics from original text to enforce preservation
+        import re
+        metrics_pattern = r'\b(\d+(?:\.\d+)?%|\d+(?:\.\d+)?\s*(?:hours|days|weeks|months|years|people|team members|developers|engineers|clients|customers|users|projects|times|percent|million|billion|k|seconds|minutes))\b'
+        original_metrics = re.findall(metrics_pattern, original_text, re.IGNORECASE)
+        
+        # Print for debugging
+        print("\nDEBUG - Original metrics found:")
+        for m in original_metrics:
+            print(f"  - {m}")
+        
+        metrics_context = ""
+        if original_metrics:
+            metrics_context = "CRITICAL: These are the ONLY metrics in the original resume that you MUST preserve:\n"
+            metrics_context += ", ".join(original_metrics) + "\n\n"
+            metrics_context += "DO NOT ADD ANY OTHER METRICS OR NUMBERS THAT ARE NOT LISTED ABOVE.\n\n"
+        else:
+            metrics_context = "CRITICAL: The original resume contains NO metrics or numerical achievements.\n"
+            metrics_context += "DO NOT ADD ANY METRICS OR NUMBERS THAT WEREN'T IN THE ORIGINAL.\n\n"
+        
         # Build a more constrained prompt that makes minimal changes
         prompt = f"""
 You are a professional resume editor specializing in making subtle improvements to resumes.
 
-Your task: Make MINIMAL and SUBTLE improvements to the resume while focusing on job alignment and clarity.
+Your task: Make EXTREMELY MINIMAL improvements to the resume while focusing on job alignment and clarity.
+
+{metrics_context}
 
 CRITICAL REQUIREMENTS:
 1. Make only MINIMAL changes to the resume
@@ -941,7 +967,6 @@ CRITICAL REQUIREMENTS:
 6. Focus ONLY on:
    - Replacing weak verbs with stronger ones
    - Making subtle wording improvements for clarity
-   - Ensuring that existing metrics are clear and well-presented
    - Very slight alignment with job description where OBVIOUS and MINIMAL
 
 ABSOLUTELY AVOID:
@@ -989,15 +1014,80 @@ Return only the final resume text without any explanation or commentary.
                         # Remove language identifier if present
                         ai_enhanced_text = ai_enhanced_text.split("\n", 1)[1].strip()
             
+            # New verification: Check if AI added unauthorized metrics
+            ai_metrics = re.findall(metrics_pattern, ai_enhanced_text, re.IGNORECASE)
+            
+            # Print for debugging
+            print("\nDEBUG - AI metrics found:")
+            for m in ai_metrics:
+                print(f"  - {m}")
+            
+            # Find metrics that were added by the AI
+            added_metrics = [m for m in ai_metrics if m not in original_metrics]
+            
+            # Print added metrics
+            print("\nDEBUG - Unauthorized metrics added:")
+            for m in added_metrics:
+                print(f"  - {m}")
+            
+            if added_metrics:
+                logger.warning(f"AI attempted to add unauthorized metrics: {', '.join(added_metrics)}. Falling back to rule-based text.")
+                print(f"\nDEBUG - FALLING BACK TO RULE-BASED TEXT due to unauthorized metrics")
+                return rule_based_text
+                
             # Verify metrics are preserved
             if not self._contains_metrics(ai_enhanced_text) and self._contains_metrics(rule_based_text):
                 logger.warning("AI rewrite removed metrics. Falling back to rule-based text.")
                 return rule_based_text
-                
+            
+            print("\nDEBUG - Using AI enhanced text (no unauthorized metrics)")
             return ai_enhanced_text
         except Exception as e:
             logger.error(f"AI rewrite failed: {str(e)}")
             raise
+
+    def _apply_basic_improvements(self, resume_text):
+        """
+        Apply only basic improvements to the resume text without adding metrics.
+        Used as a base for AI rewrite to prevent metrics invention.
+        
+        Args:
+            resume_text: Original resume text
+            
+        Returns:
+            str: Resume with basic improvements applied
+        """
+        # Replace weak phrases with stronger alternatives
+        weak_phrase_replacements = {
+            "responsible for": "managed",
+            "in charge of": "led",
+            "helped with": "contributed to", 
+            "worked on": "developed",
+            "duties included": "delivered",
+            "assisted in": "supported",
+            "making sure": "ensuring",
+            "was tasked with": "executed",
+            "was asked to": "delivered",
+            "had to": "successfully",
+            "attempted to": "implemented"
+        }
+        
+        lines = resume_text.split('\n')
+        enhanced_lines = []
+        
+        for line in lines:
+            enhanced_line = line
+            
+            # Apply weak phrase replacements
+            for weak_phrase, replacement in weak_phrase_replacements.items():
+                if weak_phrase in enhanced_line.lower():
+                    # Use regex to replace while preserving case
+                    pattern = re.compile(re.escape(weak_phrase), re.IGNORECASE)
+                    enhanced_line = pattern.sub(replacement, enhanced_line)
+            
+            enhanced_lines.append(enhanced_line)
+        
+        return '\n'.join(enhanced_lines)
 
 # Create singleton instance
 optimizer = None

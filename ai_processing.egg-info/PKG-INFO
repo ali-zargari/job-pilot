@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: ai_processing
+Version: 0.1
+Requires-Dist: openai
+Requires-Dist: pytest
+Dynamic: requires-dist
