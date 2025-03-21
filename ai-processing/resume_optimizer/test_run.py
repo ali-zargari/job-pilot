@@ -1,6 +1,6 @@
 """
-Test script to demonstrate improved resume optimizations.
-Shows how both weak phrase suggestions and metric additions are applied.
+Test script to demonstrate improvements in phrase handling and verb optimization.
+Shows before and after examples with different types of weak phrases.
 """
 
 import os
@@ -8,111 +8,140 @@ import sys
 import traceback
 from dotenv import load_dotenv
 
-# Example resume data
-EXAMPLE_RESUME = """
+# Define test cases with various problematic phrases
+TEST_CASES = [
+    {
+        "name": "Passive voice",
+        "before": "• Was responsible for developing and maintaining the company website",
+        "expected": "• Managed developing and maintaining the company website",
+    },
+    {
+        "name": "Redundant verbs",
+        "before": "• Managed leading a team of developers for the project",
+        "expected": "• Led a team of developers for the project",
+    },
+    {
+        "name": "Weak action verbs",
+        "before": "• Helped with designing the new user interface",
+        "expected": "• Contributed to designing the new user interface",
+    },
+    {
+        "name": "Complex passive construction",
+        "before": "• Was making sure all deliverables were completed on time",
+        "expected": "• Ensured all deliverables were completed on time",
+    },
+    {
+        "name": "Verbose phrases",
+        "before": "• Responsible for making sure that the team adhered to guidelines",
+        "expected": "• Managed ensuring the team adhered to guidelines",
+    },
+    {
+        "name": "Mixed issues",
+        "before": "• Was in charge of coordinating activities and was making sure everything ran smoothly",
+        "expected": "• Led coordinating activities and ensured everything ran smoothly",
+    }
+]
+
+# Example resume with weak phrasing
+WEAK_RESUME = """
 WORK EXPERIENCE
 
-Software Engineer, TechCorp (2019-2022)
-• Responsible for developing web applications
-• Helped with improving system performance
-• Worked on team projects and fixed bugs
-• Managed database operations
+Senior Software Engineer, TechCorp (2020-2023)
+• Was responsible for leading the backend development team
+• In charge of designing and implementing new features
+• Helped with improving system performance and reliability
+• Worked on troubleshooting and fixing critical bugs
 
-Project Manager, StartupX (2017-2019)
-• Led team of developers
-• Responsible for project delivery
-• Helped with customer support
+Project Manager, Innovatech (2017-2020)
+• Was making sure that all project deadlines were met
+• Responsible for coordinating between different teams
+• Assisted in client communications and reporting
+• Was in charge of budget planning and resource allocation
 """
 
-# Example job description data
-EXAMPLE_JOB = """
-Software Engineering Position
-
-Responsibilities:
-- Design and develop robust web applications using modern technologies
-- Collaborate with cross-functional teams to define, design, and ship new features
-- Troubleshoot and fix bugs in existing applications
-- Work with databases and API integrations
-
-Requirements:
-- Proficiency in web development technologies
-- Experience with databases and optimization
-- Strong problem-solving skills
-- Team collaboration experience
-"""
-
-def main():
-    # Load environment variables
-    load_dotenv()
+def test_phrases():
+    """Test individual phrase replacements."""
+    print("\n🧪 TESTING INDIVIDUAL PHRASE REPLACEMENTS")
+    print("==========================================")
     
-    print("🧪 Testing Improved Resume Optimizer")
-    print("====================================")
-    
-    # Check if OpenAI API key is available (for tracking only)
-    api_key = os.getenv("OPENAI_API_KEY")
-    print(f"API Key Available: {'Yes' if api_key else 'No'}")
-    
-    # Setup imports
     try:
         # Add parent directory to path
         sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         from resume_optimizer import get_optimizer
-        from resume_lint import analyze_resume
     except ImportError as e:
         print(f"Error importing modules: {str(e)}")
         return
+        
+    optimizer = get_optimizer(local_mode=True)
     
-    # Print original resume
-    print("\n📄 ORIGINAL RESUME:")
-    print("--------------------------------------------------")
-    print(EXAMPLE_RESUME)
-    print("--------------------------------------------------")
+    for i, case in enumerate(TEST_CASES, 1):
+        print(f"\nTest Case {i}: {case['name']}")
+        print(f"Before: {case['before']}")
+        
+        # Simulate the text replacement logic
+        bullets_needing_metrics = []
+        result = optimizer._add_quantifiable_achievements(case['before'], bullets_needing_metrics)
+        
+        print(f"After:  {result}")
+        print(f"Expected: {case['expected']}")
+        
+        if result.strip() == case['expected'].strip():
+            print("✅ PASS")
+        else:
+            print("❌ FAIL")
+
+def test_full_resume():
+    """Test optimization of a full resume."""
+    print("\n\n🧪 TESTING FULL RESUME OPTIMIZATION")
+    print("====================================")
     
-    # Initialize analyzer to get suggestions
     try:
-        # Get suggestions first
-        print("\n🔍 IDENTIFYING ISSUES:")
-        print("--------------------------------------------------")
+        # Add parent directory to path
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from resume_optimizer import get_optimizer
+    except ImportError as e:
+        print(f"Error importing modules: {str(e)}")
+        return
         
-        # Initialize optimizer
-        optimizer = get_optimizer(local_mode=True)
-        suggestions = optimizer.get_suggestions(EXAMPLE_RESUME, EXAMPLE_JOB)
-        
-        # Print individual issues
-        for i, suggestion in enumerate(suggestions, 1):
-            print(f"{i}. {suggestion.get('message', 'No message')}")
-        
-        # Now optimize the resume
-        print("\n🔧 APPLYING ALL SUGGESTED IMPROVEMENTS:")
-        print("--------------------------------------------------")
-        
-        result = optimizer.optimize_resume(EXAMPLE_RESUME, EXAMPLE_JOB)
-        
-        # Get scores
-        original_score = result.get("score", 0)
-        final_score = result.get("final_score", original_score)
-        
-        # Print the optimized resume
-        print("\n📝 OPTIMIZED RESUME:")
-        print("--------------------------------------------------")
-        print(result.get("optimized", "Error: No optimized resume"))
-        print("--------------------------------------------------")
-        
-        # Print analysis
-        print("\n📊 RESULTS:")
-        print("--------------------------------------------------")
-        print(f"• Original Score: {original_score}/100")
-        print(f"• Final Score: {final_score}/100") 
-        print(f"• Improvement: +{final_score - original_score} points")
-        print(f"• API Calls: {result.get('api_usage', 0)}")
-        
-        # Show what improvements were made
-        print("\n✅ IMPROVEMENTS MADE:")
-        print("--------------------------------------------------")
-        print("1. Replaced weak phrases with stronger action verbs")
-        print("2. Added quantifiable achievements to bullet points")
-        print("3. Enhanced overall impact through specific metrics")
-        
+    optimizer = get_optimizer(local_mode=True)
+    
+    print("\n📄 WEAK RESUME (BEFORE):")
+    print("--------------------------------------------------")
+    print(WEAK_RESUME)
+    print("--------------------------------------------------")
+    
+    # Process the resume
+    result = optimizer.optimize_resume(WEAK_RESUME)
+    
+    print("\n📄 OPTIMIZED RESUME (AFTER):")
+    print("--------------------------------------------------")
+    print(result.get("optimized", "Error: No optimized resume"))
+    print("--------------------------------------------------")
+    
+    # Print analysis
+    score_before = result.get("score", 0)
+    score_after = result.get("final_score", 0)
+    
+    print(f"\n📊 SCORES: {score_before}/100 → {score_after}/100 (+{score_after - score_before} points)")
+    
+    # Show what changes were made
+    changes = result.get("changes_made", {})
+    if changes:
+        print("\n📝 CHANGES MADE:")
+        print(f"• Lines modified: {changes.get('lines_changed', 0)} of {changes.get('total_lines', 0)} ({changes.get('change_percentage', 0)}%)")
+        print(f"• Weak phrases replaced: {changes.get('verb_replacements', 0)}")
+        print(f"• Metrics added: {changes.get('metric_additions', 0)}")
+
+def main():
+    """Run the tests."""
+    load_dotenv()
+    
+    print("🚀 TESTING VERB OPTIMIZATION FUNCTIONALITY")
+    print("=========================================")
+    
+    try:
+        test_phrases()
+        test_full_resume()
     except Exception as e:
         print(f"\n❌ ERROR: {str(e)}")
         traceback.print_exc()
