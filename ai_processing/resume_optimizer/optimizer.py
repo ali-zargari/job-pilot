@@ -950,30 +950,35 @@ class ResumeOptimizer:
             metrics_context = "CRITICAL: The original resume contains NO metrics or numerical achievements.\n"
             metrics_context += "DO NOT ADD ANY METRICS OR NUMBERS THAT WEREN'T IN THE ORIGINAL.\n\n"
         
-        # Build a more constrained prompt that makes minimal changes
+        # Build a prompt that balances meaningful improvements with preventing false information
         prompt = f"""
-You are a professional resume editor specializing in making subtle improvements to resumes.
+You are a professional resume editor who specializes in optimizing resumes.
 
-Your task: Make EXTREMELY MINIMAL improvements to the resume while focusing on job alignment and clarity.
+Your task: Enhance the resume to better align with the job description and improve clarity and impact, while staying truthful to the original content.
 
 {metrics_context}
 
 CRITICAL REQUIREMENTS:
-1. Make only MINIMAL changes to the resume
+1. Keep exact same job titles, company names, and dates
 2. DO NOT invent new experiences, achievements, or numbers
 3. DO NOT add metrics that weren't already present
-4. KEEP exact same job titles, company names, and dates
-5. PRESERVE every bullet point's core meaning and achievement
-6. Focus ONLY on:
-   - Replacing weak verbs with stronger ones
-   - Making subtle wording improvements for clarity
-   - Very slight alignment with job description where OBVIOUS and MINIMAL
+4. Preserve every bullet point's core meaning
+5. Keep all skills and technologies mentioned in the original
+
+ALLOWED IMPROVEMENTS:
+1. Replace weak verbs with stronger, more impressive alternatives
+2. Add more descriptive context to existing achievements (without adding metrics)
+3. Improve sentence structure and clarity
+4. Enhance alignment with job description where relevant
+5. Reorganize content for better emphasis (if needed)
+6. Add context about technologies/tools that were already mentioned
+7. Clarify existing bullet points by adding more precise descriptions
 
 ABSOLUTELY AVOID:
-- Adding imaginary achievements
+- Adding imaginary accomplishments
 - Inventing new metrics or changing existing ones
-- Significantly rewriting content
-- Adding content that wasn't implied in the original
+- Adding skills/technologies not mentioned in the original
+- Significantly changing roles or responsibilities
 
 {tech_context}{job_context}
 Original Resume:
@@ -981,7 +986,7 @@ Original Resume:
 {original_text}
 ```
 
-Rule-based Enhanced Resume (make only minimal refinements to this version):
+Resume to improve:
 ```
 {rule_based_text}
 ```
@@ -994,11 +999,11 @@ Return only the final resume text without any explanation or commentary.
             response = self.client.chat.completions.create(
                 model=self.gpt_model,
                 messages=[
-                    {"role": "system", "content": "You are a professional resume editor who makes extremely minimal, careful improvements to resumes. You never invent new information."},
+                    {"role": "system", "content": "You are a professional resume editor who knows how to enhance resumes without inventing information. You make meaningful improvements while staying truthful to the original."},
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=min(self.max_tokens, 2000),  # Limit output size
-                temperature=0.2  # Very low temperature for consistency
+                temperature=0.3  # Slightly higher temperature for more creativity
             )
             
             ai_enhanced_text = response.choices[0].message.content.strip()
