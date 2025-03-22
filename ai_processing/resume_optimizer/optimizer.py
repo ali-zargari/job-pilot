@@ -7,6 +7,10 @@ import logging
 from typing import Dict, List, Optional, Union
 import os
 import re  # Add this import for regular expressions
+import json
+import random
+import string
+from collections import Counter
 
 # Configure logging
 logging.basicConfig(
@@ -29,8 +33,14 @@ except ImportError:
     except ImportError:
         logger.warning("Could not import resume_gpt or resume_lint modules. Some functionality may be limited.")
 
-import openai
-from openai import OpenAI
+# Replace direct OpenAI imports with our module
+from ai_processing.resume_openai import (
+    get_openai_client, 
+    get_embedding, 
+    calculate_similarity,
+    generate_text,
+    rewrite_resume
+)
 
 class ResumeOptimizer:
     """
@@ -44,7 +54,8 @@ class ResumeOptimizer:
         local_mode=False,
         gpt_model="gpt-3.5-turbo",
         use_embeddings=True,
-        max_tokens=1000
+        max_tokens=1000,
+        apply_ai_rewrite=True
     ):
         """
         Initialize the resume optimizer.
@@ -55,32 +66,31 @@ class ResumeOptimizer:
             gpt_model: GPT model to use for API calls, default "gpt-3.5-turbo"
             use_embeddings: Whether to use embeddings for matching, default True
             max_tokens: Maximum tokens for API calls, default 1000
+            apply_ai_rewrite: Whether to always apply AI rewrite, default True
         """
         self.local_mode = local_mode
+        self.openai_api_key = openai_api_key
         self.gpt_model = gpt_model
         self.use_embeddings = use_embeddings
         self.max_tokens = max_tokens
+        self.apply_ai_rewrite = apply_ai_rewrite
         self.api_calls_count = 0
         self.api_call_cache = {}  # Cache for API calls to avoid redundant requests
         
-        # Initialize OpenAI client if API key is available
-        self.client = None
-        if openai_api_key:
-            try:
-                self.client = OpenAI(api_key=openai_api_key)
-            except Exception as e:
-                logger.warning(f"Failed to initialize OpenAI client: {str(e)}")
-        elif not local_mode:
-            # Try to get API key from environment if not in local mode
-            try:
-                self.client = OpenAI()
-            except Exception as e:
-                logger.warning(f"Failed to initialize OpenAI client with environment variables: {str(e)}")
-                self.local_mode = True  # Fall back to local mode
-        
-        if not self.client and not local_mode:
-            logger.warning("No OpenAI API key provided. Falling back to local mode.")
-            self.local_mode = True
+        # Initialize OpenAI client if we're not in local mode
+        if not local_mode:
+            self.client = get_openai_client(api_key=openai_api_key)
+            if not self.client.is_available:
+                logger.warning("OpenAI client not available. Falling back to local mode.")
+                self.local_mode = True
+        else:
+            self.client = None
+            
+        # Log mode information
+        if self.local_mode:
+            logger.info("Operating in local mode (no API calls)")
+        else:
+            logger.info("Operating in API mode with OpenAI integration")
         
     def get_embedding(self, text: str) -> List[float]:
         """
@@ -92,18 +102,12 @@ class ResumeOptimizer:
         Returns:
             List of embedding values
         """
-        if not self.client:
-            raise ValueError("OpenAI client not initialized. Please provide API key.")
+        if self.local_mode:
+            logger.warning("Cannot get embeddings in local mode")
+            return []
             
-        try:
-            response = self.client.embeddings.create(
-                input=text,
-                model="text-embedding-ada-002"
-            )
-            return response.data[0].embedding
-        except Exception as e:
-            logger.error(f"Failed to get embeddings: {str(e)}")
-            raise
+        # Use the new module's get_embedding function
+        return get_embedding(text, api_key=self.openai_api_key)
         
     def _generate_detailed_score(self, resume_text, job_description=None, lint_result=None):
         """
@@ -211,7 +215,7 @@ class ResumeOptimizer:
         resume_text: str,
         job_description: Optional[str] = None,
         reference_resumes: Optional[List[str]] = None,
-        apply_ai_rewrite: bool = False
+        apply_ai_rewrite: Optional[bool] = None
     ) -> Dict:
         """
         Full two-tier optimization process with enforced quantifiable improvements.
@@ -228,6 +232,10 @@ class ResumeOptimizer:
         if not resume_text:
             raise ValueError("Resume text cannot be empty")
         
+        # Use class default if not specified
+        if apply_ai_rewrite is None:
+            apply_ai_rewrite = self.apply_ai_rewrite
+        
         # Phase 1: Initial Resume Scoring & Pre-Validation
         # Step 1.1: First analyze with resume_lint to check if it's already optimized
         lint_result = analyze_resume(resume_text)
@@ -236,8 +244,8 @@ class ResumeOptimizer:
         detailed_score = self._generate_detailed_score(resume_text, job_description, lint_result)
         
         # Extract bullet points from original resume for targeted enhancements
-        from resume_gpt import extract_tech_stack
-        from resume_optimizer.matcher import extract_resume_bullets
+        from ai_processing.resume_gpt import extract_tech_stack
+        from ai_processing.resume_optimizer.matcher import extract_resume_bullets
         original_tech_stack = extract_tech_stack(resume_text)
         original_bullets = extract_resume_bullets(resume_text)
         original_skills = set([skill.lower() for skill in original_tech_stack])
@@ -924,132 +932,35 @@ class ResumeOptimizer:
         Returns:
             str: AI-enhanced resume text
         """
-        if not self.client:
-            raise ValueError("OpenAI client not initialized. Cannot perform AI rewrite.")
-        
-        # Create a context-aware prompt that preserves structure
-        job_context = f"Job Description:\n{job_description}\n\n" if job_description else ""
-        tech_context = f"Original Skills & Technologies: {', '.join(original_tech_stack)}\n\n" if original_tech_stack else ""
+        if self.local_mode:
+            logger.warning("Cannot apply AI rewrite in local mode")
+            return rule_based_text
         
         # Extract any existing metrics from original text to enforce preservation
-        import re
         metrics_pattern = r'\b(\d+(?:\.\d+)?%|\d+(?:\.\d+)?\s*(?:hours|days|weeks|months|years|people|team members|developers|engineers|clients|customers|users|projects|times|percent|million|billion|k|seconds|minutes))\b'
         original_metrics = re.findall(metrics_pattern, original_text, re.IGNORECASE)
         
-        # Print for debugging
-        print("\nDEBUG - Original metrics found:")
-        for m in original_metrics:
-            print(f"  - {m}")
+        # Use the resume_openai.rewrite_resume function instead of direct API calls
+        result = rewrite_resume(
+            resume_text=rule_based_text,
+            job_description=job_description,
+            skills=original_tech_stack,
+            api_key=self.openai_api_key
+        )
         
-        metrics_context = ""
-        if original_metrics:
-            metrics_context = "CRITICAL: These are the ONLY metrics in the original resume that you MUST preserve:\n"
-            metrics_context += ", ".join(original_metrics) + "\n\n"
-            metrics_context += "DO NOT ADD ANY OTHER METRICS OR NUMBERS THAT ARE NOT LISTED ABOVE.\n\n"
-        else:
-            metrics_context = "CRITICAL: The original resume contains NO metrics or numerical achievements.\n"
-            metrics_context += "DO NOT ADD ANY METRICS OR NUMBERS THAT WEREN'T IN THE ORIGINAL.\n\n"
+        # Extract the rewritten resume
+        ai_enhanced_text = result.get("rewritten_resume", "")
         
-        # Build a prompt that balances meaningful improvements with preventing false information
-        prompt = f"""
-You are a professional resume editor who specializes in optimizing resumes.
-
-Your task: Enhance the resume to better align with the job description and improve clarity and impact, while staying truthful to the original content.
-
-{metrics_context}
-
-CRITICAL REQUIREMENTS:
-1. Keep exact same job titles, company names, and dates
-2. DO NOT invent new experiences, achievements, or numbers
-3. DO NOT add metrics that weren't already present
-4. Preserve every bullet point's core meaning
-5. Keep all skills and technologies mentioned in the original
-
-ALLOWED IMPROVEMENTS:
-1. Replace weak verbs with stronger, more impressive alternatives
-2. Add more descriptive context to existing achievements (without adding metrics)
-3. Improve sentence structure and clarity
-4. Enhance alignment with job description where relevant
-5. Reorganize content for better emphasis (if needed)
-6. Add context about technologies/tools that were already mentioned
-7. Clarify existing bullet points by adding more precise descriptions
-
-ABSOLUTELY AVOID:
-- Adding imaginary accomplishments
-- Inventing new metrics or changing existing ones
-- Adding skills/technologies not mentioned in the original
-- Significantly changing roles or responsibilities
-
-{tech_context}{job_context}
-Original Resume:
-```
-{original_text}
-```
-
-Resume to improve:
-```
-{rule_based_text}
-```
-
-Return only the final resume text without any explanation or commentary.
-"""
+        # If we got something back, increment the API call counter
+        if ai_enhanced_text:
+            self.api_calls_count += 1
         
-        try:
-            # Use a chat completion for more natural language
-            response = self.client.chat.completions.create(
-                model=self.gpt_model,
-                messages=[
-                    {"role": "system", "content": "You are a professional resume editor who knows how to enhance resumes without inventing information. You make meaningful improvements while staying truthful to the original."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=min(self.max_tokens, 2000),  # Limit output size
-                temperature=0.3  # Slightly higher temperature for more creativity
-            )
+        # Check if the AI response preserves structure
+        if not ai_enhanced_text or len(ai_enhanced_text) < len(rule_based_text) / 2:
+            logger.warning("AI rewrite appears incomplete, using rule-based text")
+            return rule_based_text
             
-            ai_enhanced_text = response.choices[0].message.content.strip()
-            
-            # Extract just the resume text from any potential GPT commentary
-            if "```" in ai_enhanced_text:
-                # Extract text between first and last code block
-                parts = ai_enhanced_text.split("```")
-                if len(parts) >= 3:
-                    # Take the content of the first code block
-                    ai_enhanced_text = parts[1].strip()
-                    if ai_enhanced_text.startswith("python") or ai_enhanced_text.startswith("text"):
-                        # Remove language identifier if present
-                        ai_enhanced_text = ai_enhanced_text.split("\n", 1)[1].strip()
-            
-            # New verification: Check if AI added unauthorized metrics
-            ai_metrics = re.findall(metrics_pattern, ai_enhanced_text, re.IGNORECASE)
-            
-            # Print for debugging
-            print("\nDEBUG - AI metrics found:")
-            for m in ai_metrics:
-                print(f"  - {m}")
-            
-            # Find metrics that were added by the AI
-            added_metrics = [m for m in ai_metrics if m not in original_metrics]
-            
-            # Print added metrics
-            print("\nDEBUG - Unauthorized metrics added:")
-            for m in added_metrics:
-                print(f"  - {m}")
-            
-            if added_metrics:
-                logger.warning(f"AI attempted to add unauthorized metrics: {', '.join(added_metrics)}. Falling back to rule-based text.")
-                print(f"\nDEBUG - FALLING BACK TO RULE-BASED TEXT due to unauthorized metrics")
-                return rule_based_text
-                
-            # Verify metrics are preserved
-            if not self._contains_metrics(ai_enhanced_text) and self._contains_metrics(rule_based_text):
-                logger.warning("AI rewrite removed metrics. Falling back to rule-based text.")
-                return rule_based_text
-            
-            print("\nDEBUG - Using AI enhanced text (no unauthorized metrics)")
-            return ai_enhanced_text
-        except Exception as e:
-            logger.error(f"AI rewrite failed: {str(e)}")
-            raise
+        return ai_enhanced_text
 
     def _apply_basic_improvements(self, resume_text):
         """
@@ -1110,6 +1021,7 @@ def get_optimizer(**kwargs):
         embedding_model: Embedding model to use
         use_embeddings: Whether to use embeddings
         local_mode: Whether to operate in local mode (minimal API calls)
+        apply_ai_rewrite: Whether to apply AI rewrite (default: True)
         
     Returns:
         ResumeOptimizer: Configured resume optimizer
@@ -1124,6 +1036,11 @@ def get_optimizer(**kwargs):
     if "local_mode" not in kwargs and "openai_api_key" not in kwargs:
         kwargs["local_mode"] = True
         logger.info("No API key available - defaulting to local mode")
+    
+    # Default to using AI rewrite
+    if "apply_ai_rewrite" not in kwargs:
+        kwargs["apply_ai_rewrite"] = True
+        logger.info("Defaulting to AI rewrite mode")
             
     optimizer = ResumeOptimizer(**kwargs)
     return optimizer

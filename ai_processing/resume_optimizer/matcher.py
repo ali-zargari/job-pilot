@@ -9,8 +9,9 @@ import numpy as np
 from typing import List, Dict, Optional, Tuple
 import logging
 from sklearn.metrics.pairwise import cosine_similarity
-import openai
-from openai import OpenAI
+
+# Replace direct OpenAI imports with our new module
+from ai_processing.resume_openai import get_embedding, calculate_similarity
 
 # Configure logging
 logging.basicConfig(
@@ -42,10 +43,6 @@ class ResumeMatcher:
             use_embeddings: Whether to use embedding-based matching (vs keywords only)
         """
         self.openai_api_key = openai_api_key
-        self.client = None
-        if openai_api_key:
-            self.client = OpenAI(api_key=openai_api_key)
-            
         self.similarity_threshold = similarity_threshold
         self.embedding_model = embedding_model
         self.use_embeddings = use_embeddings
@@ -60,14 +57,8 @@ class ResumeMatcher:
         Returns:
             Embedding vector
         """
-        if not self.client:
-            raise ValueError("OpenAI API key required for embeddings")
-            
-        response = self.client.embeddings.create(
-            input=text,
-            model=self.embedding_model
-        )
-        return response.data[0].embedding
+        # Use the new module's get_embedding function
+        return get_embedding(text, model=self.embedding_model, api_key=self.openai_api_key)
         
     def calculate_similarity(
         self,
@@ -84,11 +75,8 @@ class ResumeMatcher:
         Returns:
             Similarity score (0-1)
         """
-        # Reshape for sklearn
-        e1 = np.array(embedding1).reshape(1, -1)
-        e2 = np.array(embedding2).reshape(1, -1)
-        
-        return float(cosine_similarity(e1, e2)[0][0])
+        # Use the new module's calculate_similarity function
+        return calculate_similarity(embedding1, embedding2)
         
     def match_resume(self, resume_text, job_description):
         """
@@ -102,31 +90,40 @@ class ResumeMatcher:
             float: Match score between 0-1
         """
         try:
-            if self.use_embeddings and self.client:
+            if self.use_embeddings:
                 # Get embeddings
                 resume_embedding = self.get_embedding(resume_text)
                 job_embedding = self.get_embedding(job_description)
                 
+                if not resume_embedding or not job_embedding:
+                    # Fall back to keyword matching if embeddings fail
+                    logger.warning("Embeddings not available, falling back to keyword matching")
+                    return self._keyword_match(resume_text, job_description)
+                
                 # Calculate cosine similarity
-                similarity = self.cosine_similarity(resume_embedding, job_embedding)
+                similarity = self.calculate_similarity(resume_embedding, job_embedding)
                 
                 # Convert to percentage
                 match_percent = 0.5 + (similarity * 0.5)  # Scale from -1,1 to 0,1 with midpoint bias
                 
                 return match_percent  # Return as a float between 0-1
             else:
-                # Fall back to simple keyword matching
-                job_keywords = self.extract_keywords(job_description)
-                resume_keywords = self.extract_keywords(resume_text)
-                
-                # Calculate matches
-                matches = set(job_keywords) & set(resume_keywords)
-                match_percent = len(matches) / max(len(job_keywords), 1)
-                
-                return match_percent  # Return as a float between 0-1
+                # Use keyword matching
+                return self._keyword_match(resume_text, job_description)
         except Exception as e:
             logger.error(f"Error matching resume: {str(e)}")
             return 0.5  # Default to middle score on error
+    
+    def _keyword_match(self, resume_text, job_description):
+        """Simple keyword matching fallback"""
+        job_keywords = self.extract_keywords(job_description)
+        resume_keywords = self.extract_keywords(resume_text)
+        
+        # Calculate matches
+        matches = set(job_keywords) & set(resume_keywords)
+        match_percent = len(matches) / max(len(job_keywords), 1)
+        
+        return match_percent
         
     def find_best_matches(
         self,
@@ -222,32 +219,7 @@ class ResumeMatcher:
         
         return keywords
 
-    def cosine_similarity(self, vec1, vec2):
-        """
-        Calculate cosine similarity between two vectors.
-        
-        Args:
-            vec1: First vector
-            vec2: Second vector
-            
-        Returns:
-            float: Cosine similarity score
-        """
-        # Ensure vectors are numpy arrays
-        vec1 = np.array(vec1)
-        vec2 = np.array(vec2)
-        
-        # Calculate cosine similarity
-        dot_product = np.dot(vec1, vec2)
-        norm_vec1 = np.linalg.norm(vec1)
-        norm_vec2 = np.linalg.norm(vec2)
-        
-        # Avoid division by zero
-        if norm_vec1 == 0 or norm_vec2 == 0:
-            return 0
-            
-        return dot_product / (norm_vec1 * norm_vec2)
-
+# Keep the utility functions
 def extract_resume_bullets(resume_text):
     """
     Extract bullet points from a resume

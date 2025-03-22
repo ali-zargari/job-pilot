@@ -4,6 +4,7 @@ Provides access to the two-tier AI optimization system.
 """
 
 from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 import logging
@@ -21,6 +22,15 @@ app = FastAPI(
     title="Resume Optimizer API",
     description="Two-tier AI system for resume optimization",
     version="0.1.0"
+)
+
+# Add CORS middleware to allow requests from any origin
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
 )
 
 # Models
@@ -85,7 +95,8 @@ async def optimize_resume(
         result = resume_optimizer.optimize_resume(
             resume_text=request.resume_text,
             job_description=request.job_description,
-            reference_resumes=request.reference_resumes
+            reference_resumes=request.reference_resumes,
+            apply_ai_rewrite=True  # Always use AI rewrite
         )
         
         return OptimizationResponse(**result)

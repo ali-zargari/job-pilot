@@ -30,15 +30,15 @@ def test_check_missing_numbers():
     
 def test_check_sentence_length():
     # Test sentences that are too short
-    assert not rules.check_sentence_length("Short sentence.", 20)
+    assert not rules.check_sentence_length("Short sentence.")
     
     # Test sentences that are exactly at the limit
     twenty_words = "This is a sentence that has exactly twenty words which means it is right at the limit."
-    assert not rules.check_sentence_length(twenty_words, 20)
+    assert not rules.check_sentence_length(twenty_words)
     
     # Test sentences that are too long
     long_sentence = "This is a very long sentence that definitely has more than twenty words and therefore should be flagged as too long because it's hard to read lengthy sentences in a resume context."
-    assert rules.check_sentence_length(long_sentence, 20)
+    assert rules.check_sentence_length(long_sentence)
     
 def test_check_ats_friendly():
     # Test ATS-friendly text
