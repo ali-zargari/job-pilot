@@ -1,0 +1,30 @@
+Senior Software Engineer
+
+We're looking for a talented Software Engineer with experience in web development
+and cloud technologies. The ideal candidate will have:
+
+- Strong JavaScript skills, with React and Node.js experience
+- Experience with database optimization and query tuning
+- Knowledge of cloud platforms (AWS, Azure or GCP)
+- Good communication and teamwork abilities
+- Experience with CI/CD pipelines and DevOps practices
+
+Responsibilities:
+- Develop and maintain high-quality, scalable web applications
+- Work with front-end and back-end technologies
+- Collaborate with cross-functional teams
+- Optimize application performance
+- Implement automated testing and CI/CD pipelines
+- Troubleshoot and debug issues
+- Mentor junior developers
+
+Requirements:
+- Bachelor's degree in Computer Science or related field
+- 3+ years of experience in software development
+- Proficiency in JavaScript, including React and Node.js
+- Experience with database technologies (SQL and NoSQL)
+- Knowledge of cloud services and infrastructure
+- Understanding of software development best practices
+- Strong problem-solving skills
+
+Join our dynamic team working on cutting-edge web applications! 

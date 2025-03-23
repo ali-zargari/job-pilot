@@ -1,0 +1,2 @@
+[console_scripts]
+optimize-resume = ai_processing.scripts.optimize_resume:main

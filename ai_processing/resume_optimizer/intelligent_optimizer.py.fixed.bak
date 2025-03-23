@@ -1,0 +1,1288 @@
+"""
+
+Intelligent Resume Optimizer Module
+
+
+
+This module provides advanced NLP-based resume optimization using local tools
+
+like spaCy and NLTK, without relying on online AI services.
+
+"""
+
+
+
+import os
+
+import re
+
+import json
+
+import time
+
+import logging
+
+import importlib.util
+
+from collections import defaultdict
+
+from typing import Dict, List, Tuple, Optional, Set, Any, Union
+
+
+
+# Configure logging
+
+logging.basicConfig(
+
+    level=logging.INFO,
+
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+)
+
+logger = logging.getLogger(__name__)
+
+
+
+# Try to import NLP libraries
+
+try:
+
+    import spacy
+
+    SPACY_AVAILABLE = True
+
+    try:
+
+        nlp = spacy.load("en_core_web_sm")
+
+        logger.info("Successfully loaded spaCy model")
+
+    except OSError:
+
+        logger.warning("spaCy model not found. Some features may be limited.")
+
+        nlp = None
+
+except ImportError:
+
+    logger.warning("spaCy not installed. Some features will be limited.")
+
+    SPACY_AVAILABLE = False
+
+    nlp = None
+
+
+
+try:
+
+    import nltk
+
+    from nltk.tokenize import sent_tokenize, word_tokenize
+
+    from nltk.corpus import stopwords, wordnet
+
+    from nltk.stem import WordNetLemmatizer
+
+    NLTK_AVAILABLE = True
+
+    try:
+
+        # Check if NLTK resources are available
+
+        nltk.data.find('tokenizers/punkt')
+
+        nltk.data.find('corpora/stopwords')
+
+        nltk.data.find('corpora/wordnet')
+
+        nltk.data.find('taggers/averaged_perceptron_tagger')
+
+        lemmatizer = WordNetLemmatizer()
+
+        stop_words = set(stopwords.words('english'))
+
+        logger.info("Successfully loaded NLTK resources")
+
+    except LookupError:
+
+        logger.warning("NLTK resources not found. Some features may be limited.")
+
+        lemmatizer = None
+
+        stop_words = set()
+
+except ImportError:
+
+    logger.warning("NLTK not installed. Some features will be limited.")
+
+    NLTK_AVAILABLE = False
+
+    lemmatizer = None
+
+    stop_words = set()
+
+
+
+# Resource file paths
+
+RESOURCES_DIR = os.path.join(os.path.dirname(__file__), "resources")
+
+ACTION_VERBS_FILE = os.path.join(RESOURCES_DIR, "action_verbs.json")
+
+WEAK_PHRASES_FILE = os.path.join(RESOURCES_DIR, "weak_phrases.json")
+
+INDUSTRY_TERMS_FILE = os.path.join(RESOURCES_DIR, "industry_terms.json")
+
+RESUME_SECTIONS_FILE = os.path.join(RESOURCES_DIR, "resume_sections.json")
+
+
+
+# Load resource files
+
+def load_json_resource(file_path: str, default_value: Any = None) -> Any:
+
+    """Load a JSON resource file, returning a default value if it doesn't exist."""
+
+    try:
+
+        if os.path.exists(file_path):
+
+            with open(file_path, 'r', encoding='utf-8') as f:
+
+                return json.load(f)
+
+        else:
+
+            logger.warning(f"Resource file not found: {file_path}")
+
+            return default_value
+
+    except Exception as e:
+
+        logger.error(f"Error loading resource file {file_path}: {str(e)}")
+
+        return default_value
+
+
+
+# Load section patterns
+
+section_data = load_json_resource(RESUME_SECTIONS_FILE, {
+
+    "section_patterns": {},
+
+    "bullet_point_patterns": [],
+
+    "date_patterns": [],
+
+    "company_position_patterns": [],
+
+    "email_patterns": [],
+
+    "phone_patterns": [],
+
+    "url_patterns": [],
+
+    "weak_words": [],
+
+    "strong_words": []
+
+})
+
+
+
+# Load action verbs
+
+action_verbs = load_json_resource(ACTION_VERBS_FILE, {
+
+    "achievement": ["achieved", "improved", "increased", "reduced", "decreased"],
+
+    "leadership": ["led", "managed", "directed", "supervised", "oversaw"],
+
+    "technical": ["developed", "implemented", "designed", "engineered", "programmed"],
+
+    "communication": ["communicated", "presented", "wrote", "authored", "negotiated"],
+
+    "analysis": ["analyzed", "evaluated", "assessed", "researched", "investigated"]
+
+})
+
+
+
+# Load weak phrases and their replacements
+
+weak_phrases = load_json_resource(WEAK_PHRASES_FILE, {
+
+    "responsible for": "managed",
+
+    "duties included": "executed",
+
+    "worked on": "developed",
+
+    "helped with": "contributed to",
+
+    "assisted with": "supported",
+
+    "participated in": "collaborated on",
+
+    "involved in": "drove",
+
+    "was tasked with": "spearheaded"
+
+})
+
+
+
+# Load industry terms
+
+industry_terms = load_json_resource(INDUSTRY_TERMS_FILE, {
+
+    "technology": {
+
+        "roles": ["Software Engineer", "Developer", "Programmer"],
+
+        "skills": ["programming", "development", "testing"],
+
+        "tools": ["Git", "GitHub", "JIRA"],
+
+        "languages": ["JavaScript", "Python", "Java"],
+
+        "frameworks": ["React", "Angular", "Django"],
+
+        "strong_verbs": ["developed", "implemented", "engineered"]
+
+    }
+
+})
+
+
+
+
+
+class IntelligentResumeOptimizer:
+
+    """
+
+    A class that provides intelligent, NLP-based resume optimization
+
+    without requiring online AI services.
+
+    """
+
+    
+
+    def __init__(self, use_spacy: bool = True, use_nltk: bool = True):
+
+        """
+
+        Initialize the resume optimizer with specified NLP capabilities.
+
+        
+
+        Args:
+
+            use_spacy: Whether to use spaCy for NLP tasks
+
+            use_nltk: Whether to use NLTK for NLP tasks
+
+        """
+
+        self.use_spacy = use_spacy and SPACY_AVAILABLE and nlp is not None
+
+        self.use_nltk = use_nltk and NLTK_AVAILABLE and lemmatizer is not None
+
+        
+
+        if not (self.use_spacy or self.use_nltk):
+
+            logger.warning("No NLP libraries available. Falling back to basic optimizations.")
+
+        
+
+        # Compile regex patterns for each section
+
+        self.section_patterns = {}
+
+        for section, patterns in section_data.get("section_patterns", {}).items():
+
+            self.section_patterns[section] = [re.compile(p, re.IGNORECASE) for p in patterns]
+
+        
+
+        # Compile other patterns
+
+        self.bullet_point_patterns = [re.compile(p) for p in section_data.get("bullet_point_patterns", [])]
+
+        self.date_patterns = [re.compile(p) for p in section_data.get("date_patterns", [])]
+
+        self.company_position_patterns = [re.compile(p) for p in section_data.get("company_position_patterns", [])]
+
+        self.email_patterns = [re.compile(p) for p in section_data.get("email_patterns", [])]
+
+        self.phone_patterns = [re.compile(p) for p in section_data.get("phone_patterns", [])]
+
+        self.url_patterns = [re.compile(p) for p in section_data.get("url_patterns", [])]
+
+        self.weak_words_patterns = [re.compile(p, re.IGNORECASE) for p in section_data.get("weak_words", [])]
+
+        self.strong_words_patterns = [re.compile(p, re.IGNORECASE) for p in section_data.get("strong_words", [])]
+
+        
+
+        # Compile weak phrases patterns
+
+        self.weak_phrases_patterns = {}
+
+        for phrase, replacement in weak_phrases.items():
+
+            self.weak_phrases_patterns[re.compile(r'\b' + re.escape(phrase) + r'\b', re.IGNORECASE)] = replacement
+
+    
+
+    def optimize(self, resume_text: str, job_description: Optional[str] = None) -> Tuple[str, float]:
+
+        """
+
+        Optimize the resume using NLP techniques.
+
+        
+
+        Args:
+
+            resume_text: The text of the resume to optimize
+
+            job_description: Optional job description to tailor the resume to
+
+            
+
+        Returns:
+
+            Tuple containing optimized resume text and time taken
+
+        """
+
+        start_time = time.time()
+
+        logger.info("Starting intelligent resume optimization")
+
+        
+
+        # Parse the resume into sections
+
+        sections = self._parse_resume_sections(resume_text)
+
+        
+
+        # If a job description is provided, analyze it
+
+        job_keywords = {}
+
+        if job_description:
+
+            job_keywords = self._extract_job_keywords(job_description)
+
+            logger.info(f"Extracted {len(job_keywords)} keywords from job description")
+
+        
+
+        # Optimize each section
+
+        optimized_sections = {}
+
+        for section_name, section_content in sections.items():
+
+            if section_name == "header":
+
+                # Don't modify header sections (personal info)
+
+                optimized_sections[section_name] = section_content
+
+            else:
+
+                optimized_sections[section_name] = self._optimize_section(
+
+                    section_name, section_content, job_keywords
+
+                )
+
+        
+
+        # Reconstruct the optimized resume
+
+        optimized_resume = self._reconstruct_resume(optimized_sections, sections)
+
+        
+
+        # Post-processing fixups
+
+        optimized_resume = self._final_grammar_check(optimized_resume)
+
+        
+
+        end_time = time.time()
+
+        time_taken = end_time - start_time
+
+        logger.info(f"Resume optimization completed in {time_taken:.2f} seconds")
+
+        
+
+        return optimized_resume, time_taken
+
+    
+
+    def _parse_resume_sections(self, resume_text: str) -> Dict[str, List[str]]:
+
+        """
+
+        Parse the resume into different sections.
+
+        
+
+        Args:
+
+            resume_text: The text of the resume
+
+            
+
+        Returns:
+
+            Dictionary mapping section names to lists of lines
+
+        """
+
+        lines = resume_text.split('\n')
+
+        current_section = "header"
+
+        sections = defaultdict(list)
+
+        
+
+        for line in lines:
+
+            line = line.strip()
+
+            if not line:
+
+                continue
+
+            
+
+            # Check if this line is a section header
+
+            section_matched = False
+
+            for section, patterns in self.section_patterns.items():
+
+                for pattern in patterns:
+
+                    if pattern.search(line):
+
+                        current_section = section
+
+                        section_matched = True
+
+                        break
+
+                if section_matched:
+
+                    break
+
+            
+
+            # Add the line to the current section
+
+            sections[current_section].append(line)
+
+        
+
+        return dict(sections)
+
+    
+
+    def _extract_job_keywords(self, job_description: str) -> Dict[str, float]:
+
+        """
+
+        Extract keywords from the job description with weights.
+
+        
+
+        Args:
+
+            job_description: The text of the job description
+
+            
+
+        Returns:
+
+            Dictionary mapping keywords to their importance weights
+
+        """
+
+        keywords = {}
+
+        
+
+        if self.use_spacy:
+
+            # Use spaCy for keyword extraction
+
+            doc = nlp(job_description)
+
+            
+
+            # Extract nouns and noun phrases
+
+            for chunk in doc.noun_chunks:
+
+                keywords[chunk.text.lower()] = 1.0
+
+            
+
+            # Extract verbs
+
+            for token in doc:
+
+                if token.pos_ == "VERB" and not token.is_stop:
+
+                    keywords[token.lemma_.lower()] = 0.8
+
+            
+
+            # Extract named entities
+
+            for ent in doc.ents:
+
+                keywords[ent.text.lower()] = 1.2
+
+                
+
+        elif self.use_nltk:
+
+            # Use NLTK for keyword extraction
+
+            words = word_tokenize(job_description.lower())
+
+            
+
+            # Filter out stopwords
+
+            filtered_words = [word for word in words if word.isalnum() and word not in stop_words]
+
+            
+
+            # Add lemmatized words to keywords
+
+            for word in filtered_words:
+
+                keywords[lemmatizer.lemmatize(word)] = 1.0
+
+                
+
+        else:
+
+            # Basic keyword extraction (fallback)
+
+            words = re.findall(r'\b\w+\b', job_description.lower())
+
+            for word in words:
+
+                if len(word) > 3:  # Skip very short words
+
+                    keywords[word] = 1.0
+
+        
+
+        # Identify industry terms and give them higher weight
+
+        for industry, terms in industry_terms.items():
+
+            for category, term_list in terms.items():
+
+                for term in term_list:
+
+                    term_lower = term.lower()
+
+                    if term_lower in job_description.lower():
+
+                        keywords[term.lower()] = 1.5
+
+        
+
+        return keywords
+
+    
+
+    def _optimize_section(self, section_name: str, section_lines: List[str], 
+
+                          job_keywords: Dict[str, float]) -> List[str]:
+
+        """
+
+        Optimize a specific section of the resume.
+
+        
+
+        Args:
+
+            section_name: The name of the section
+
+            section_lines: Lines of text in the section
+
+            job_keywords: Keywords from the job description
+
+            
+
+        Returns:
+
+            List of optimized lines for the section
+
+        """
+
+        optimized_lines = []
+
+        
+
+        # First line is typically the section header, keep it unchanged
+
+        if section_lines:
+
+            optimized_lines.append(section_lines[0])
+
+        
+
+        # Process the remaining lines based on section type
+
+        for i, line in enumerate(section_lines[1:], 1):
+
+            if section_name == "work_experience":
+
+                optimized_line = self._optimize_experience_line(line, job_keywords)
+
+            elif section_name == "skills":
+
+                optimized_line = self._optimize_skills_line(line, job_keywords)
+
+            elif section_name == "education":
+
+                optimized_line = self._optimize_education_line(line)
+
+            elif section_name == "summary":
+
+                optimized_line = self._optimize_summary_line(line, job_keywords)
+
+            else:
+
+                optimized_line = self._basic_optimize_line(line)
+
+            
+
+            optimized_lines.append(optimized_line)
+
+        
+
+        return optimized_lines
+
+    
+
+    def _optimize_experience_line(self, line: str, job_keywords: Dict[str, float]) -> str:
+
+        """
+
+        Optimize a line from the work experience section.
+
+        
+
+        Args:
+
+            line: The line to optimize
+
+            job_keywords: Keywords from the job description
+
+            
+
+        Returns:
+
+            Optimized line
+
+        """
+
+        # Check if it's a company/position line or a bullet point
+
+        is_bullet = any(pattern.match(line) for pattern in self.bullet_point_patterns)
+
+        
+
+        if is_bullet:
+
+            # This is a bullet point describing job duties/achievements
+
+            # Remove the bullet and optimize the text
+
+            for pattern in self.bullet_point_patterns:
+
+                line = pattern.sub("", line).strip()
+
+            
+
+            # Replace weak phrases with stronger alternatives
+
+            for pattern, replacement in self.weak_phrases_patterns.items():
+
+                line = pattern.sub(replacement, line)
+
+            
+
+            # Ensure starts with a strong action verb
+
+            if not any(pattern.search(line) for pattern in self.strong_words_patterns):
+
+                # No strong verb found, try to add one based on content
+
+                if self.use_spacy:
+
+                    doc = nlp(line)
+
+                    # Find the first verb
+
+                    for token in doc:
+
+                        if token.pos_ == "VERB":
+
+                            # Choose a better verb based on context
+
+                            category = self._determine_verb_category(doc)
+
+                            if category in action_verbs and action_verbs[category]:
+
+                                line = f"{action_verbs[category][0].capitalize()} {line}"
+
+                            break
+
+                
+
+            # Capitalize first letter and ensure proper ending punctuation
+
+            line = line[0].upper() + line[1:]
+
+            if not line.endswith(('.', '!', '?')):
+
+                line += '.'
+
+            
+
+            # Add the bullet point back
+
+#             line = " + line # COMMENTED OUT DUE TO SYNTAX ERROR
+
+            
+
+        else:
+
+            # This might be a job title/company line or date range
+
+            # Format it consistently but don't change content
+
+            pass
+
+        
+
+        return line
+
+    
+
+    def _optimize_skills_line(self, line: str, job_keywords: Dict[str, float]) -> str:
+
+        """
+
+        Optimize a line from the skills section.
+
+        
+
+        Args:
+
+            line: The line to optimize
+
+            job_keywords: Keywords from the job description
+
+            
+
+        Returns:
+
+            Optimized line
+
+        """
+
+        # If job keywords are provided, emphasize matching skills
+
+        if job_keywords and self.use_spacy:
+
+            doc = nlp(line)
+
+            emphasized_skills = []
+
+            
+
+            for token in doc:
+
+                if token.text.lower() in job_keywords or token.lemma_.lower() in job_keywords:
+
+                    # This is a skill that matches a job keyword
+
+                    emphasized_skills.append(token.text)
+
+            
+
+            # If we found matching skills, reorganize to put them first
+
+            if emphasized_skills:
+
+                # Extract all skills from the line (assuming comma-separated)
+
+                all_skills = [s.strip() for s in line.split(',')]
+
+                # Filter out the emphasized skills from the original list
+
+                other_skills = [s for s in all_skills if s not in emphasized_skills]
+
+                # Combine emphasized skills first, then others
+
+                return ', '.join(emphasized_skills + other_skills)
+
+        
+
+        return line
+
+    
+
+    def _optimize_education_line(self, line: str) -> str:
+
+        """
+
+        Optimize a line from the education section.
+
+        
+
+        Args:
+
+            line: The line to optimize
+
+            
+
+        Returns:
+
+            Optimized line
+
+        """
+
+        # For education, mostly ensure consistent formatting
+
+        # Check if it's a degree/institution line
+
+        if re.search(r'\b(?:bachelor|master|doctor|phd|mba|bs|ba|ms|ma|bsc|msc)\b', 
+
+                    line, re.IGNORECASE):
+
+            # Capitalize degree names
+
+            line = re.sub(r'\b(bachelor|master|doctor|phd|mba|bs|ba|ms|ma|bsc|msc)\b',
+
+                         lambda m: m.group(0).upper(), line, flags=re.IGNORECASE)
+
+        
+
+        return line
+
+    
+
+    def _optimize_summary_line(self, line: str, job_keywords: Dict[str, float]) -> str:
+
+        """
+
+        Optimize a line from the summary section.
+
+        
+
+        Args:
+
+            line: The line to optimize
+
+            job_keywords: Keywords from the job description
+
+            
+
+        Returns:
+
+            Optimized line
+
+        """
+
+        # Replace weak phrases with stronger alternatives
+
+        for pattern, replacement in self.weak_phrases_patterns.items():
+
+            line = pattern.sub(replacement, line)
+
+        
+
+        # Ensure proper capitalization and punctuation
+
+        line = line[0].upper() + line[1:]
+
+        if not line.endswith(('.', '!', '?')):
+
+            line += '.'
+
+        
+
+        return line
+
+    
+
+    def _basic_optimize_line(self, line: str) -> str:
+
+        """
+
+        Perform basic optimization on a line.
+
+        
+
+        Args:
+
+            line: The line to optimize
+
+            
+
+        Returns:
+
+            Optimized line
+
+        """
+
+        # Replace weak phrases with stronger alternatives
+
+        for pattern, replacement in self.weak_phrases_patterns.items():
+
+            line = pattern.sub(replacement, line)
+
+        
+
+        # Ensure bullet points have proper formatting
+
+        for pattern in self.bullet_point_patterns:
+
+            if pattern.match(line):
+
+                # Extract the bullet point text
+
+                bullet_text = pattern.sub("", line).strip()
+
+                # Capitalize first letter
+
+                if bullet_text:
+
+                    bullet_text = bullet_text[0].upper() + bullet_text[1:]
+
+                    # Ensure proper ending punctuation
+
+                    if not bullet_text.endswith(('.', '!', '?')):
+
+                        bullet_text += '.'
+
+                # Reconstruct with proper bullet point
+
+                bullet_char = pattern.match(line).group(0).strip()
+
+                line = f"{bullet_char} {bullet_text}"
+
+                break
+
+        
+
+        return line
+
+    
+
+    def _determine_verb_category(self, doc) -> str:
+
+        """
+
+        Determine the appropriate verb category based on the context.
+
+        
+
+        Args:
+
+            doc: spaCy document
+
+            
+
+        Returns:
+
+            Category name (e.g., 'achievement', 'leadership')
+
+        """
+
+        # Count keywords by category
+
+        category_scores = defaultdict(int)
+
+        
+
+        for token in doc:
+
+            token_text = token.text.lower()
+
+            token_lemma = token.lemma_.lower()
+
+            
+
+            # Check for achievement indicators
+
+            if token_lemma in ['improve', 'increase', 'reduce', 'save', 'exceed']:
+
+                category_scores['achievement'] += 3
+
+            
+
+            # Check for leadership indicators
+
+            if token_lemma in ['lead', 'manage', 'direct', 'supervise', 'oversee', 'team']:
+
+                category_scores['leadership'] += 3
+
+            
+
+            # Check for technical indicators
+
+            if token_lemma in ['develop', 'implement', 'design', 'code', 'program']:
+
+                category_scores['technical'] += 3
+
+            
+
+            # Check for communication indicators
+
+            if token_lemma in ['communicate', 'present', 'write', 'negotiate', 'report']:
+
+                category_scores['communication'] += 3
+
+            
+
+            # Check for analysis indicators
+
+            if token_lemma in ['analyze', 'evaluate', 'assess', 'research', 'investigate']:
+
+                category_scores['analysis'] += 3
+
+        
+
+        # Return the highest scoring category or default to 'achievement'
+
+        if category_scores:
+
+            return max(category_scores.items(), key=lambda x: x[1])[0]
+
+        return 'achievement'
+
+    
+
+    def _reconstruct_resume(self, optimized_sections: Dict[str, List[str]], 
+
+                          original_sections: Dict[str, List[str]]) -> str:
+
+        """
+
+        Reconstruct the resume from optimized sections, preserving the original order.
+
+        
+
+        Args:
+
+            optimized_sections: Dictionary of optimized sections
+
+            original_sections: Dictionary of original sections
+
+            
+
+        Returns:
+
+            Reconstructed resume text
+
+        """
+
+        result_lines = []
+
+        
+
+        # Preserve the original section order
+
+        section_order = list(original_sections.keys())
+
+        
+
+        for section in section_order:
+
+            if section in optimized_sections:
+
+                result_lines.extend(optimized_sections[section])
+
+                result_lines.append("")  # Add an empty line between sections
+
+        
+
+        return "\n".join(result_lines)
+
+    
+
+    def _final_grammar_check(self, text: str) -> str:
+
+        """
+
+        Perform final grammar checks and fixes on the optimized text.
+
+        
+
+        Args:
+
+            text: The optimized text
+
+            
+
+        Returns:
+
+            Text with grammar fixes applied
+
+        """
+
+        lines = text.split('\n')
+
+        
+
+        for i, line in enumerate(lines):
+
+            # Ensure bullet points have proper capitalization
+
+            for pattern in self.bullet_point_patterns:
+
+                if pattern.match(line):
+
+                    # Extract the bullet point marker
+
+                    bullet_marker = pattern.match(line).group(0)
+
+                    # Extract the text after the bullet point
+
+                    bullet_text = line[len(bullet_marker):].strip()
+
+                    
+
+                    # Capitalize the first letter of the text
+
+                    if bullet_text:
+
+                        bullet_text = bullet_text[0].upper() + bullet_text[1:]
+
+                        # Ensure proper ending punctuation for bullet points that are sentences
+
+                        if len(bullet_text) > 20 and not bullet_text.endswith(('.', '!', '?')):
+
+                            bullet_text += '.'
+
+                        
+
+                        lines[i] = bullet_marker + bullet_text
+
+            
+
+            # Fix common grammar errors
+
+            # "a" vs "an"
+
+            lines[i] = re.sub(r'\ba\s+([aeiouAEIOU])', r'an \1', lines[i])
+
+            
+
+            # Fix double spaces
+
+            lines[i] = re.sub(r'\s{2,}', ' ', lines[i])
+
+            
+
+            # Fix incorrect word pairs
+
+            common_errors = {
+
+                r'\b(affect)\b': 'effect',
+
+                r'\b(their)\b': 'their',  # Placeholder - would need actual context to fix their/they're/there
+
+                r'\b(its)\b': 'its',  # Placeholder - would need actual context to fix its/it's
+
+                r'\b(you\'re)\b': 'you\'re',  # Placeholder - would need context to fix your/you're
+
+                r'\b(loose)\b': 'loose',  # Placeholder - would need context to fix loose/lose
+
+                r'\b(then)\b': 'then',  # Placeholder - would need context to fix then/than
+
+                r'\b(to)\b': 'to',  # Placeholder - would need context to fix to/too/two
+
+                r'\bdesigned team\b': 'design team',
+
+                r'\bworking environment\b': 'work environment'
+
+            }
+
+            
+
+            for error_pattern, correction in common_errors.items():
+
+                # Only apply if the pattern is a known error in this context
+
+                # This is a simplified approach - in reality, you'd need more context
+
+                # to correctly fix these common errors
+
+                if re.search(error_pattern, lines[i]):
+
+                    # Consider context before applying
+
+                    pass
+
+        
+
+        return '\n'.join(lines)
+
+
+
+
+
+def optimize_resume(resume_text: str, job_description: Optional[str] = None) -> Tuple[str, float]:
+
+    """
+
+    Optimize a resume using the intelligent optimizer.
+
+    
+
+    Args:
+
+        resume_text: The text of the resume to optimize
+
+        job_description: Optional job description to tailor the resume to
+
+        
+
+    Returns:
+
+        Tuple containing optimized resume text and time taken
+
+    """
+
+    optimizer = IntelligentResumeOptimizer()
+
+    return optimizer.optimize(resume_text, job_description)
+

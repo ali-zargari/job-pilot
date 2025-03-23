@@ -1,0 +1,24 @@
+WORK EXPERIENCE
+
+Software Engineer, TechCorp (2019-2022)
+• Managed developing web applications using React and Node.js.
+• Contributed to testing and debugging of various software components.
+• Developed database optimization improving query performance.
+• Led coordinating activities and ensured everything ran smoothly.
+• Collaborated on implementing new features requested by clients.
+
+Developer, StartupX (2017-2019)
+• Built and maintained customer-facing e-commerce website.
+• Collaborated on implementing payment processing system.
+• Collaborated with design team on UI/UX improvements.
+• Managed fixing bugs and addressing customer feedback.
+• Was executed documenting code and processes for the team.
+
+EDUCATION
+Bachelor of Science in Computer Science, Tech University (2013-2017)
+
+SKILLS
+Programming Languages: JavaScript, Python, Java, HTML/CSS
+Frameworks: React, Node.js, Express
+Databases: MongoDB, MySQL
+Tools: Git, Docker, Jenkins

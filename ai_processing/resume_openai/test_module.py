@@ -168,13 +168,38 @@ def test_resume_rewrite(api_key=None):
         api_key=api_key
     )
     
+    # Log the entire result structure for debugging
+    logger.info(f"Result type: {type(result)}")
+    logger.info(f"Result keys: {result.keys()}")
+    
     rewritten = result.get("rewritten_resume", "")
     improvements = result.get("improvements", [])
     
+    logger.info(f"Rewritten type: {type(rewritten)}")
+    logger.info(f"Improvements type: {type(improvements)}")
+    
     if rewritten:
         logger.info(f"✅ Resume successfully rewritten")
-        logger.info(f"Improvements made: {len(improvements)}")
-        logger.info(f"First 100 characters: {rewritten[:100]}...")
+        
+        # Handle improvements properly based on its type
+        if isinstance(improvements, list):
+            improvements_count = len(improvements)
+        elif isinstance(improvements, dict):
+            improvements_count = len(improvements.keys())
+        else:
+            improvements_count = 0
+            
+        logger.info(f"Improvements made: {improvements_count}")
+        
+        # Handle different return types for rewritten_resume
+        if isinstance(rewritten, str) and len(rewritten) > 0:
+            logger.info(f"First 100 characters: {rewritten[:100]}...")
+        elif isinstance(rewritten, dict) and rewritten:
+            # Convert dict to string representation and show first part
+            rewritten_str = str(rewritten)
+            logger.info(f"Resume structure (first 100 chars): {rewritten_str[:100]}...")
+        else:
+            logger.info(f"Rewritten resume is not a valid string or is empty. Value: {rewritten}")
     else:
         logger.warning("❌ Failed to rewrite resume")
         
