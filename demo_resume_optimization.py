@@ -74,36 +74,59 @@ WEAK_VERB_REPLACEMENTS = {
 
 def truly_rule_based_optimize(resume_text):
     """
-    Apply ONLY legitimate rule-based improvements to a resume without fabricating any data.
-    Only replaces weak verbs with stronger ones and fixes formatting issues.
+    Find suggestions for resume improvement rather than making changes directly.
+    This is a purely rule-based approach that doesn't use AI.
     
     Args:
         resume_text: Original resume text
         
     Returns:
-        str: Rule-based optimized resume
+        dict: Dictionary of suggestions for resume improvement
     """
-    optimized = resume_text
+    suggestions = {
+        "weak_verbs": [],
+        "formatting_issues": [],
+        "content_improvements": []
+    }
     
-    # Replace weak verbs with stronger ones
+    # Find weak verbs that could be replaced
     for weak_verb, strong_verb in WEAK_VERB_REPLACEMENTS.items():
-        # Use regex to match only at the start of bullet points
+        # Look for weak verbs at the start of bullet points
         pattern = r'(•\s*)' + weak_verb
-        replacement = r'\1' + strong_verb
-        optimized = re.sub(pattern, replacement, optimized, flags=re.IGNORECASE)
+        matches = re.finditer(pattern, resume_text, flags=re.IGNORECASE)
+        for match in matches:
+            original_text = match.group(0)
+            suggestion = f"Replace '{weak_verb}' with '{strong_verb}' in '{original_text}'"
+            suggestions["weak_verbs"].append(suggestion)
     
-    # Fix formatting issues
-    # Ensure consistent bullet point format (• with a space after)
-    optimized = re.sub(r'•(\S)', r'• \1', optimized)
+    # Find formatting issues
+    # Check for bullet points without spaces
+    inconsistent_bullets = re.findall(r'•(\S)', resume_text)
+    if inconsistent_bullets:
+        suggestions["formatting_issues"].append("Ensure consistent spacing after bullet points")
     
-    # Ensure consistent spacing between sections
-    optimized = re.sub(r'\n{3,}', r'\n\n', optimized)
+    # Check for excessive line breaks
+    if re.search(r'\n{3,}', resume_text):
+        suggestions["formatting_issues"].append("Normalize spacing between sections to be consistent")
     
-    return optimized
+    # Content improvement suggestions (basic rule-based checks)
+    bullet_points = re.findall(r'•\s*(.*?)(?=\n•|\n\n|\Z)', resume_text, re.DOTALL)
+    for point in bullet_points:
+        # Check for bullet points without numbers/metrics
+        if not re.search(r'\d+', point):
+            suggestions["content_improvements"].append(f"Add quantifiable metrics to: '{point.strip()}'")
+        
+        # Check for bullet points that are too short
+        if len(point.strip()) < 30:
+            suggestions["content_improvements"].append(f"Expand on this point to be more descriptive: '{point.strip()}'")
+    
+    # Return dictionary of suggestions
+    return suggestions
 
 def format_json_resume(resume_dict):
     """
     Format a structured JSON resume into a readable text format.
+    Ensures all standard resume sections are included.
     
     Args:
         resume_dict: Dictionary containing structured resume data
@@ -224,7 +247,10 @@ def format_json_resume(resume_dict):
             university = edu.get('university', '')
             dates = edu.get('dates', '')
             
-            formatted.append(f"• {degree}, {major}, {university} ({dates})")
+            if major:
+                formatted.append(f"• {degree}, {major}, {university} ({dates})")
+            else:
+                formatted.append(f"• {degree}, {university} ({dates})")
         elif isinstance(edu, list):
             for school in edu:
                 degree = school.get('degree', '')
@@ -232,21 +258,52 @@ def format_json_resume(resume_dict):
                 university = school.get('university', '')
                 dates = school.get('dates', '')
                 
-                formatted.append(f"• {degree}, {major}, {university} ({dates})")
+                if major:
+                    formatted.append(f"• {degree}, {major}, {university} ({dates})")
+                else:
+                    formatted.append(f"• {degree}, {university} ({dates})")
     
     formatted.append("")  # Blank line
     
     # Skills
+    formatted.append("SKILLS")
+    formatted.append("")
+    
     if 'skills' in resume_dict:
-        formatted.append("SKILLS")
-        formatted.append("")
-        
         if isinstance(resume_dict['skills'], list):
             formatted.append(', '.join(resume_dict['skills']))
         else:
             formatted.append(resume_dict['skills'])
     
     return '\n'.join(formatted)
+
+def display_rule_based_suggestions(suggestions):
+    """
+    Format and display rule-based suggestions in a human-readable format.
+    
+    Args:
+        suggestions: Dictionary containing rule-based suggestions
+    """
+    print("=== WEAK VERBS SUGGESTIONS ===")
+    if suggestions["weak_verbs"]:
+        for i, suggestion in enumerate(suggestions["weak_verbs"], 1):
+            print(f"{i}. {suggestion}")
+    else:
+        print("No weak verb suggestions found.")
+    
+    print("\n=== FORMATTING SUGGESTIONS ===")
+    if suggestions["formatting_issues"]:
+        for i, suggestion in enumerate(suggestions["formatting_issues"], 1):
+            print(f"{i}. {suggestion}")
+    else:
+        print("No formatting suggestions found.")
+    
+    print("\n=== CONTENT IMPROVEMENT SUGGESTIONS ===")
+    if suggestions["content_improvements"]:
+        for i, suggestion in enumerate(suggestions["content_improvements"], 1):
+            print(f"{i}. {suggestion}")
+    else:
+        print("No content improvement suggestions found.")
 
 def main():
     """
@@ -258,69 +315,53 @@ def main():
     logger.info("\n=== ORIGINAL RESUME ===\n")
     print(SAMPLE_RESUME)
     
-    # Step 1: Apply TRULY rule-based optimization only
-    logger.info("\n=== APPLYING TRULY RULE-BASED OPTIMIZATION (NO AI) ===\n")
-    
-    # Apply our custom rule-based optimization that doesn't fabricate data
-    rule_based_result = truly_rule_based_optimize(SAMPLE_RESUME)
-    
-    # Display rule-based optimized resume
-    logger.info("\n=== TRULY RULE-BASED OPTIMIZED RESUME (NO AI) ===\n")
-    print(rule_based_result)
-    
-    # Step 2: Apply AI-based optimization (using OpenAI)
-    logger.info("\n=== APPLYING AI-BASED OPTIMIZATION ===\n")
-    
     # Get API key from environment
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        logger.warning("No OpenAI API key found. Skipping AI optimization.")
-        return
+        logger.warning("No OpenAI API key found. Using rule-based optimization only.")
+        use_ai = False
+    else:
+        use_ai = True
     
-    # Apply AI rewrite to the original resume
-    ai_result = rewrite_resume(
-        resume_text=SAMPLE_RESUME,  # Note: using original resume, not rule-based
+    # Step 1: Rule-based suggestions
+    logger.info("\n=== RULE-BASED SUGGESTIONS ===\n")
+    rule_based_result = rewrite_resume(
+        resume_text=SAMPLE_RESUME,
         job_description=SAMPLE_JOB_DESCRIPTION,
-        skills=["Python", "Backend Development", "Database Design", "AWS", "Agile"],
-        api_key=api_key
+        api_key=api_key,
+        use_ai=False  # Only use rule-based optimization
     )
     
-    # Display AI-enhanced resume
-    logger.info("\n=== AI-ENHANCED RESUME ===\n")
+    # Display rule-based suggestions
+    display_rule_based_suggestions(rule_based_result["suggestions"])
     
-    # Handle different return types for rewritten_resume
-    rewritten = ai_result.get("rewritten_resume", "")
-    
-    if isinstance(rewritten, str):
-        print(rewritten)
-    elif isinstance(rewritten, dict):
-        # Format the structured JSON into a proper resume format
-        formatted_resume = format_json_resume(rewritten)
-        print(formatted_resume)
+    # Step 2: If API key is available, also run with AI
+    if use_ai:
+        logger.info("\n=== AI-BASED OPTIMIZATION ===\n")
         
-        # Also show the raw JSON for reference
-        logger.info("\n=== AI-ENHANCED RESUME (RAW JSON) ===\n")
-        print(json.dumps(rewritten, indent=2))
-    else:
-        logger.warning("Unexpected format for AI-enhanced resume")
-    
-    # Show improvements made by the AI
-    logger.info("\n=== AI IMPROVEMENTS ===\n")
-    improvements = ai_result.get("improvements", [])
-    if improvements:
-        if isinstance(improvements, list):
+        # Run the AI-based optimization with explicit settings to prevent job title changes
+        ai_result = rewrite_resume(
+            resume_text=SAMPLE_RESUME,
+            job_description=SAMPLE_JOB_DESCRIPTION,
+            api_key=api_key,
+            use_ai=True,  # Use AI-based optimization
+            avoid_fabricated_metrics=True  # Don't fabricate metrics
+        )
+        
+        # Display AI-enhanced resume
+        logger.info("\n=== AI-ENHANCED RESUME ===\n")
+        print(ai_result["rewritten_resume"])
+        
+        # Show improvements made by the AI
+        logger.info("\n=== AI IMPROVEMENTS ===\n")
+        improvements = ai_result.get("improvements", [])
+        if improvements:
             for i, improvement in enumerate(improvements, 1):
                 print(f"{i}. {improvement}")
-        elif isinstance(improvements, dict):
-            for category, items in improvements.items():
-                print(f"=== {category} ===")
-                if isinstance(items, list):
-                    for item in items:
-                        print(f"• {item}")
-                else:
-                    print(f"• {items}")
-    else:
-        print("No specific improvements listed")
+        else:
+            print("No specific improvements listed")
+    
+    logger.info("\n=== OPTIMIZATION COMPLETE ===\n")
 
 if __name__ == "__main__":
     main() 
