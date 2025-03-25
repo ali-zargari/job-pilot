@@ -13,7 +13,7 @@ export interface ResumeResult {
   };
   optimized: string;
   original: string;
-  rule_based?: string;
+  rule_based: string;
   draft?: string; // Keep for backward compatibility
   improvements?: string[];
   optimized_with_ai?: boolean;
@@ -30,7 +30,7 @@ interface ResumeState {
   isLoading: boolean;
   result: ResumeResult | null;
   error: string | null;
-  currentView: 'original' | 'draft' | 'optimized';
+  currentView: 'original' | 'rule_based' | 'optimized';
   
   // Actions
   setFile: (file: File | null) => void;
@@ -38,7 +38,7 @@ interface ResumeState {
   startOptimization: () => void;
   setResult: (result: ResumeResult) => void;
   setError: (error: string | null) => void;
-  setCurrentView: (view: 'original' | 'draft' | 'optimized') => void;
+  setCurrentView: (view: 'original' | 'rule_based' | 'optimized') => void;
   reset: () => void;
 }
 

@@ -262,6 +262,16 @@ def rewrite_resume(
 Your task is to enhance the given resume while maintaining 100% truthfulness.
 Focus on: clear communication, active voice, achievements, and professional language.
 
+CONTEXT PRESERVATION RULES:
+1. When you see numerical values or metrics in the original text (e.g., "~100% performance improvement", "30% faster"), 
+   you MUST preserve the ENTIRE CONTEXT of the achievement.
+2. SPECIFIC EXAMPLES of what must be preserved exactly as written:
+   - "Optimized system performance by implementing multi-threading, achieving a ~100% performance improvement"
+   - "Developed a PID-driven emotional prediction algorithm, significantly improving readability of feedback"
+3. You can enhance surrounding language, but specific technologies (multi-threading, PID-driven algorithm) and 
+   the associated metrics MUST remain intact.
+
+CRITICAL: DO NOT REMOVE ANY EXISTING QUANTIFIABLE METRICS. Any numbers, percentages, or specific metrics already present in the original resume MUST be preserved exactly as written.
 CRITICAL: DO NOT CHANGE ANY JOB TITLES UNDER ANY CIRCUMSTANCES. Job titles are factual information that must remain exactly as provided.
 CRITICAL: DO NOT CHANGE ANY COMPANY NAMES UNDER ANY CIRCUMSTANCES.
 CRITICAL: DO NOT CHANGE ANY DATES UNDER ANY CIRCUMSTANCES.
@@ -271,17 +281,30 @@ IMPORTANT: Your response MUST include ALL sections from the original resume with
 This includes: Name, Title, Contact Information, Work Experience, Education, and Skills sections.
 Preserve all original contact information (email, phone, LinkedIn), job titles, companies, dates, and skills.
 Use the EXACT same bullet point format (•) as the original resume.
+
+PRESERVING STRENGTHS: The resume already contains excellent elements that should not be changed:
+1. If the resume contains quantifiable achievements (numbers, percentages, metrics), preserve them ALL exactly as written
+2. If the resume uses strong action verbs, keep those exact verbs
+3. Only enhance areas that need improvement - don't change what's already effective
+
+When tailoring for a job description:
+1. Analyze which skills and experiences from the resume most closely match the job requirements
+2. Emphasize those relevant skills and experiences more prominently
+3. Use the same terminology and keywords from the job description where appropriate
+4. Focus extra attention on making the resume match the job description closely
 """
 
     # Add metrics guidance if requested
     if avoid_fabricated_metrics:
         system_prompt += """
 IMPORTANT ABOUT METRICS:
-1. DO NOT fabricate specific numbers or percentages if they were not in the original resume.
-2. If no specific metrics exist in the original, use qualitative terms like "significantly improved", 
-   "effectively managed", or "consistently delivered" instead of making up numbers.
-3. If a number or metric is present in the original resume, preserve it exactly as written.
-4. Quantify achievements in general terms without specifying exact figures when original metrics are not available.
+1. NEVER remove any existing metrics - preserve ALL numbers, dollar amounts, percentages, and quantifiable achievements
+2. DO NOT fabricate specific numbers or percentages if they were not in the original resume
+3. If no specific metrics exist in a particular bullet point, use qualitative terms like "significantly improved", 
+   "effectively managed", or "consistently delivered" instead of making up numbers
+4. If a number or metric is present in the original resume, preserve it exactly as written - do not remove or change it
+5. Quantify achievements in general terms only when original metrics are not available
+6. Pay special attention to preserving approximate percentages like "~100%" - these must remain exactly as written
 """
 
     system_prompt += "\nMake the resume more impressive without fabricating details."

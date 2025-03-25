@@ -359,3 +359,88 @@ def get_rule_based_suggestions(resume_text):
             suggestions["content_improvements"].append(f"Expand on this point to be more descriptive: '{point.strip()}'")
     
     return suggestions
+
+def extract_metrics(text):
+    """
+    Extract all metrics and quantifiable values from a text.
+    
+    Args:
+        text (str): The text to analyze
+        
+    Returns:
+        list: All metrics and quantifiable values found
+    """
+    patterns = [
+        # Percentages including approximate values with ~ symbol
+        r'~\s*\d+(?:\.\d+)?%',  # Approximate percentages like ~100%
+        r'\b\d+(?:\.\d+)?%',    # Regular percentages
+        r'\b\d+(?:\.\d+)? percent',
+        
+        # Currency amounts
+        r'\$\d+(?:,\d+)*(?:\.\d+)?(?:\s*[kmb])?',
+        r'\d+(?:,\d+)*(?:\.\d+)?\s*(?:dollars|USD)',
+        
+        # Numerical ranges with units
+        r'\d+(?:-|–|—|\sto\s)\d+\s*(?:hours|days|weeks|months|years|people|members|users|clients)',
+        
+        # Numbers with units
+        r'\b\d+(?:,\d+)*(?:\.\d+)?\s*(?:hours|days|weeks|months|years)',
+        r'\b\d+(?:,\d+)*\s*(?:people|team members|developers|engineers|clients|customers|users|projects)',
+        
+        # Large numbers with K/M/B suffix
+        r'\b\d+(?:\.\d+)?[kmb]\b',
+        
+        # Multipliers
+        r'\b\d+(?:\.\d+)?x\b',
+        
+        # Time measurements
+        r'\b\d+(?::\d+)+\s*(?:minutes|seconds|hours)?',
+        
+        # Dates (to avoid mistaking them for metrics)
+        r'\b(?:19|20)\d{2}(?:-|–|—)\d{2,4}\b',
+        
+        # Score/ratings
+        r'\b\d+(?:\.\d+)?\s*(?:out of|\/)\s*\d+(?:\.\d+)?\b'
+    ]
+    
+    all_metrics = []
+    for pattern in patterns:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        all_metrics.extend(matches)
+    
+    # Clean up and deduplicate
+    all_metrics = [m.strip() for m in all_metrics]
+    # Sort by length (longest first) to ensure partial matches don't cause false positives
+    all_metrics.sort(key=len, reverse=True)
+    return all_metrics
+
+def verify_metrics_preserved(original_text, rewritten_text):
+    """
+    Verify that all metrics from the original text are preserved in the rewritten text.
+    
+    Args:
+        original_text (str): Original resume text
+        rewritten_text (str): AI-rewritten resume text
+        
+    Returns:
+        tuple: (bool, list) - Whether all metrics are preserved and list of missing metrics
+    """
+    original_metrics = extract_metrics(original_text)
+    
+    # Special case check for approximate percentages like ~100%
+    # These are particularly important to verify exactly
+    approx_percentage_pattern = r'~\s*\d+(?:\.\d+)?%'
+    approx_percentages = re.findall(approx_percentage_pattern, original_text)
+    for approx_pct in approx_percentages:
+        if approx_pct not in rewritten_text:
+            # Double check if we already caught this
+            if approx_pct not in original_metrics:
+                original_metrics.append(approx_pct)
+    
+    # Check if each metric appears in the rewritten text
+    missing_metrics = []
+    for metric in original_metrics:
+        if metric not in rewritten_text:
+            missing_metrics.append(metric)
+    
+    return len(missing_metrics) == 0, missing_metrics

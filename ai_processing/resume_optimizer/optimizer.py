@@ -27,7 +27,8 @@ try:
         check_weak_phrases, 
         suggest_alternatives, 
         get_rule_based_suggestions,
-        has_bullet_points
+        has_bullet_points,
+        verify_metrics_preserved
     )
 except ImportError:
     try:
@@ -38,7 +39,8 @@ except ImportError:
             check_weak_phrases, 
             suggest_alternatives, 
             get_rule_based_suggestions,
-            has_bullet_points
+            has_bullet_points,
+            verify_metrics_preserved
         )
     except ImportError:
         logger.warning("Could not import resume_gpt or resume_lint modules. Some functionality may be limited.")
@@ -954,6 +956,44 @@ class ResumeOptimizer:
         metrics_pattern = r'\b(\d+(?:\.\d+)?%|\d+(?:\.\d+)?\s*(?:hours|days|weeks|months|years|people|team members|developers|engineers|clients|customers|users|projects|times|percent|million|billion|k|seconds|minutes))\b'
         original_metrics = re.findall(metrics_pattern, original_text, re.IGNORECASE)
         
+        # Looking for approximate percentages specifically
+        approx_percent_pattern = r'(~\s*\d+(?:\.\d+)?%)'
+        approx_percentages = re.findall(approx_percent_pattern, original_text, re.IGNORECASE)
+        
+        # Get strengths from the resume analysis to ensure they're preserved
+        lint_result = analyze_resume(original_text)
+        strengths = [issue for issue in lint_result.get("issues", []) if issue.get("severity") == "positive"]
+        
+        # Format strengths as a string to include in the prompt
+        strengths_text = ""
+        if strengths:
+            strengths_text = "\n\nIMPORTANT - PRESERVE THESE STRENGTHS:\n"
+            for strength in strengths:
+                message = strength.get("message", "").replace("✅ ", "")
+                if "Examples:" in message:
+                    # Split and format examples nicely
+                    parts = message.split("Examples:")
+                    base_message = parts[0].strip()
+                    examples = parts[1].split(";")
+                    examples = [ex.strip().replace("This helps demonstrate your impact.", "") for ex in examples if ex.strip()]
+                    
+                    strengths_text += f"- {base_message}\n"
+                    if examples:
+                        strengths_text += "  Examples that MUST be preserved:\n"
+                        for example in examples:
+                            if example:
+                                strengths_text += f"  * {example.strip()}\n"
+                else:
+                    strengths_text += f"- {message}\n"
+        
+        # If we have specific metrics, add them as a special preservation instruction
+        all_metrics = original_metrics + approx_percentages
+        if all_metrics:
+            metrics_text = "\n\nCRITICAL - PRESERVE THESE EXACT METRICS:\n"
+            for metric in all_metrics:
+                metrics_text += f"- {metric}\n"
+            strengths_text += metrics_text
+        
         # Get rule-based suggestions to provide to OpenAI
         rule_suggestions = get_rule_based_suggestions(original_text)
         
@@ -974,13 +1014,20 @@ class ResumeOptimizer:
                 [f"- {suggestion}" for suggestion in rule_suggestions['formatting_issues']]
             )
         
+        # Job description tailoring guidance
+        job_tailoring = ""
+        if job_description:
+            job_tailoring = "\n\nTAILORING GUIDANCE:\n"
+            job_tailoring += "This resume needs to be tailored for the following job description. Focus on highlighting relevant skills and experiences:\n\n"
+            job_tailoring += job_description
+        
         # Use the resume_openai.rewrite_resume function instead of direct API calls
         result = rewrite_resume(
             resume_text=rule_based_text,
             job_description=job_description,
             skills=original_tech_stack,
             api_key=self.openai_api_key,
-            custom_instructions=f"Please apply these specific suggestions where appropriate: {suggestion_text}" if suggestion_text else None
+            custom_instructions=f"{strengths_text}\n\nSUGGESTED IMPROVEMENTS:{suggestion_text}\n\n{job_tailoring}"
         )
         
         # Extract the rewritten resume
@@ -994,12 +1041,24 @@ class ResumeOptimizer:
         if not ai_enhanced_text or len(ai_enhanced_text) < len(rule_based_text) / 2:
             logger.warning("AI rewrite appears incomplete, using rule-based text")
             return rule_based_text
+        
+        # Verify all metrics are preserved using the new function
+        all_metrics_preserved, missing_metrics = verify_metrics_preserved(original_text, ai_enhanced_text)
+        if not all_metrics_preserved:
+            logger.warning(f"AI rewrite removed metrics: {', '.join(missing_metrics)}. Falling back to rule-based text.")
+            return rule_based_text
             
+        # Special check for approximate percentages (like ~100%)
+        for approx_pct in approx_percentages:
+            if approx_pct not in ai_enhanced_text:
+                logger.warning(f"AI rewrite removed approximate percentage: {approx_pct}. Falling back to rule-based text.")
+                return rule_based_text
+        
         return ai_enhanced_text
 
     def _apply_basic_improvements(self, resume_text):
         """
-        Apply only basic improvements to the resume text without adding metrics.
+        Apply more significant improvements to the resume text without adding metrics.
         Used as a base for AI rewrite to prevent metrics invention.
         
         Args:
@@ -1020,7 +1079,31 @@ class ResumeOptimizer:
             "was tasked with": "executed",
             "was asked to": "delivered",
             "had to": "successfully",
-            "attempted to": "implemented"
+            "attempted to": "implemented",
+            "tried to": "strategically",
+            "participated in": "actively contributed to",
+            "was involved in": "played a key role in",
+            "took part in": "collaborated on",
+            "was responsible for managing": "directed",
+            "was responsible for developing": "engineered",
+            "was responsible for creating": "designed",
+            "was responsible for implementing": "executed",
+            "was part of": "served on",
+            "assisted with": "facilitated",
+            "helped develop": "co-developed",
+            "was engaged in": "drove",
+            "worked with": "collaborated with",
+            "attended": "participated in",
+            "completed": "delivered",
+            "did": "executed",
+            "made": "created",
+            "used": "leveraged",
+            "utilized": "harnessed",
+            "got": "achieved",
+            "enhanced": "elevated",
+            "improved": "optimized",
+            "reduced": "decreased",
+            "supported": "empowered"
         }
         
         lines = resume_text.split('\n')
@@ -1028,17 +1111,87 @@ class ResumeOptimizer:
         
         for line in lines:
             enhanced_line = line
+            is_bullet = line.strip().startswith(('•', '-', '*', '>', '+'))
             
-            # Apply weak phrase replacements
-            for weak_phrase, replacement in weak_phrase_replacements.items():
-                if weak_phrase in enhanced_line.lower():
-                    # Use regex to replace while preserving case
-                    pattern = re.compile(re.escape(weak_phrase), re.IGNORECASE)
-                    enhanced_line = pattern.sub(replacement, enhanced_line)
+            # Improve bullets with more significant enhancements
+            if is_bullet:
+                # Apply weak phrase replacements
+                for weak_phrase, replacement in sorted(weak_phrase_replacements.items(), key=lambda x: len(x[0]), reverse=True):
+                    if weak_phrase in enhanced_line.lower():
+                        # Use regex to replace while preserving case
+                        pattern = re.compile(re.escape(weak_phrase), re.IGNORECASE)
+                        enhanced_line = pattern.sub(replacement, enhanced_line)
+                
+                # Remove redundant phrases
+                redundant_phrases = [
+                    "in order to", 
+                    "for the purpose of", 
+                    "in an effort to", 
+                    "with the intention of",
+                    "with the goal of",
+                    "as needed",
+                    "when necessary",
+                    "as required"
+                ]
+                for phrase in redundant_phrases:
+                    if phrase in enhanced_line.lower():
+                        enhanced_line = re.sub(re.escape(phrase), "to", enhanced_line, flags=re.IGNORECASE)
+                
+                # Improve starting verbs of bullet points
+                if enhanced_line.startswith('• ') and len(enhanced_line) > 3:
+                    # Try to make the first verb stronger if it's not already
+                    words = enhanced_line[2:].split()
+                    if words and words[0].lower() not in set(weak_phrase_replacements.values()):
+                        # Special case mappings for first words
+                        first_word_mappings = {
+                            "managed": "orchestrated",
+                            "developed": "engineered",
+                            "implemented": "spearheaded",
+                            "created": "architected",
+                            "designed": "conceptualized",
+                            "improved": "transformed",
+                            "increased": "amplified",
+                            "reduced": "minimized",
+                            "led": "directed",
+                            "built": "constructed",
+                            "wrote": "authored",
+                            "performed": "executed",
+                            "conducted": "orchestrated"
+                        }
+                        
+                        for old_verb, new_verb in first_word_mappings.items():
+                            if words[0].lower() == old_verb:
+                                # Replace the first word keeping case
+                                words[0] = new_verb if words[0].islower() else new_verb.capitalize()
+                                enhanced_line = '• ' + ' '.join(words)
+                                break
             
             enhanced_lines.append(enhanced_line)
         
-        return '\n'.join(enhanced_lines)
+        enhanced_text = '\n'.join(enhanced_lines)
+        
+        # Fix redundant verb combinations
+        redundant_verb_pairs = {
+            "managed leading": "led",
+            "led managing": "directed",
+            "managed managing": "oversaw",
+            "contributed to improving": "enhanced",
+            "developed implementing": "implemented",
+            "managed handling": "handled",
+            "contributed to developing": "co-developed",
+            "managed coordinating": "coordinated",
+            "led leading": "directed",
+            "conducted performing": "performed",
+            "executed implementing": "implemented",
+            "performed executing": "executed"
+        }
+        
+        # Fix redundant verb combinations with word boundaries to avoid partial matches
+        for pair, replacement in redundant_verb_pairs.items():
+            # Use regex with word boundaries
+            enhanced_text = re.sub(r'\b' + pair + r'\b', replacement, enhanced_text, flags=re.IGNORECASE)
+        
+        return enhanced_text
 
 # Create singleton instance
 optimizer = None

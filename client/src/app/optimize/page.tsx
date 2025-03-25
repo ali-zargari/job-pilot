@@ -11,6 +11,19 @@ import { Badge } from '@/components/ui/Badge';
 import { Progress } from '@/components/ui/Progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import axios from 'axios';
+import ResumeViewer from '@/components/ui/ResumeViewer';
+
+// Add a function to estimate if content will fit on one page
+const estimatePageFit = (content: string): boolean => {
+  // A rough estimate - standard resume page is about 50-60 lines
+  // This can be adjusted based on font size and margins
+  const lines = content.split('\n').filter(line => line.trim().length > 0);
+  // Each character takes up space too, so factor in line length
+  const charCount = content.length;
+  
+  // Threshold based on average resume (about 3000 chars or 55 lines for a single page resume)
+  return (lines.length <= 60 && charCount <= 4000);
+};
 
 export default function OptimizePage() {
   const [step, setStep] = useState(1);
@@ -88,7 +101,14 @@ export default function OptimizePage() {
       
       // Set result data
       console.log("Setting result data");
-      setResult(response.data);
+      const responseData = response.data;
+      
+      // Ensure compatibility between rule_based and draft fields
+      if (!responseData.rule_based && responseData.draft) {
+        responseData.rule_based = responseData.draft;
+      }
+      
+      setResult(responseData);
       setStep(3);
     } catch (error: any) {
       console.error('Error optimizing resume:', error);
@@ -488,49 +508,75 @@ export default function OptimizePage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <Tabs defaultValue="optimized" className="w-full" onValueChange={(value) => setCurrentView(value as any)}>
+                    <Tabs defaultValue="optimized" onValueChange={(value) => setCurrentView(value as any)}>
                       <TabsList className="mb-4">
+                        <TabsTrigger value="optimized">Optimized Resume</TabsTrigger>
+                        <TabsTrigger value="rule_based">Rule-Based</TabsTrigger>
                         <TabsTrigger value="original">Original</TabsTrigger>
-                        {result.draft && (
-                          <TabsTrigger value="draft">Initial Draft</TabsTrigger>
-                        )}
-                        <TabsTrigger value="optimized">Final Version</TabsTrigger>
                       </TabsList>
                       
-                      <TabsContent value="original" className="space-y-4">
-                        <div className="bg-gray-50 p-6 rounded-lg prose max-w-none">
-                          <pre className="whitespace-pre-wrap">{result.original}</pre>
-                        </div>
+                      <TabsContent value="optimized" className="mt-0">
+                        {result.optimized && (
+                          <>
+                            <ResumeViewer 
+                              content={result.optimized} 
+                              isEditable={true}
+                              onUpdate={(newContent) => {
+                                setResult({
+                                  ...result,
+                                  optimized: newContent
+                                });
+                              }}
+                            />
+                            {!estimatePageFit(result.optimized) && (
+                              <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                                <strong>Warning:</strong> Your resume may exceed one page. Consider trimming content for better ATS compatibility.
+                              </div>
+                            )}
+                          </>
+                        )}
                       </TabsContent>
                       
-                      {result.draft && (
-                        <TabsContent value="draft" className="space-y-4">
-                          <div className="bg-gray-50 p-6 rounded-lg prose max-w-none">
-                            <pre className="whitespace-pre-wrap">{result.draft}</pre>
-                          </div>
-                        </TabsContent>
-                      )}
+                      <TabsContent value="rule_based" className="mt-0">
+                        {result.rule_based && (
+                          <>
+                            <ResumeViewer 
+                              content={result.rule_based} 
+                              isEditable={true}
+                              onUpdate={(newContent) => {
+                                setResult({
+                                  ...result,
+                                  rule_based: newContent
+                                });
+                              }}
+                            />
+                            {!estimatePageFit(result.rule_based) && (
+                              <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                                <strong>Warning:</strong> Your resume may exceed one page. Consider trimming content for better ATS compatibility.
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </TabsContent>
                       
-                      <TabsContent value="optimized" className="space-y-4">
-                        <div className="bg-gray-50 p-6 rounded-lg prose max-w-none">
-                          <pre className="whitespace-pre-wrap">{result.optimized}</pre>
-                        </div>
+                      <TabsContent value="original" className="mt-0">
+                        {result.original && (
+                          <>
+                            <ResumeViewer 
+                              content={result.original} 
+                              isEditable={false}
+                            />
+                            {!estimatePageFit(result.original) && (
+                              <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                                <strong>Warning:</strong> Your resume may exceed one page. Consider trimming content for better ATS compatibility.
+                              </div>
+                            )}
+                          </>
+                        )}
                       </TabsContent>
                     </Tabs>
-                  </CardContent>
-                  <CardFooter className="flex justify-between">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setFile(null);
-                        setJobDescription('');
-                        setStep(1);
-                      }}
-                    >
-                      Start Over
-                    </Button>
                     
-                    <div className="flex gap-2">
+                    <div className="mt-4">
                       <Button
                         onClick={() => {
                           if (!result || !currentView || !result[currentView]) return;
@@ -544,10 +590,23 @@ export default function OptimizePage() {
                           element.click();
                           document.body.removeChild(element);
                         }}
+                        className="w-full"
                       >
                         Download {(currentView || 'optimized').charAt(0).toUpperCase() + (currentView || 'optimized').slice(1)} Version
                       </Button>
                     </div>
+                  </CardContent>
+                  <CardFooter className="flex justify-between">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setFile(null);
+                        setJobDescription('');
+                        setStep(1);
+                      }}
+                    >
+                      Start Over
+                    </Button>
                   </CardFooter>
                 </Card>
               </>

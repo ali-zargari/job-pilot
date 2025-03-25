@@ -36,14 +36,92 @@ def extract_bullet_points(text):
     lines = text.split('\n')
     bullets = []
     
-    for line in lines:
+    # Improved bullet detection patterns
+    bullet_patterns = [
+        # Standard bullet characters
+        r'^\s*[•\-\*\→\▪\▸\‣\○\·\–\—\♦\★\»\▶]\s+(.+)$',
+        # Numbered bullets
+        r'^\s*\d+[\.\)]\s+(.+)$',
+        # Letter bullets
+        r'^\s*[a-zA-Z][\.\)]\s+(.+)$',
+        # Diamond bullets
+        r'^\s*[\◆\◇\◊\♦]\s+(.+)$',
+        # Lines with some indentation that appear after a bullet line
+        r'^\s{2,}(.+)$'
+    ]
+    
+    # Two-pass process: first detect bullet starters, then combine multi-line bullets
+    bullet_start_indices = []
+    potential_bullets = []
+    
+    # First pass: identify potential bullet starting lines
+    for i, line in enumerate(lines):
         line = line.strip()
-        # Check for common bullet characters
-        if any(line.startswith(bullet) for bullet in rules.VALID_BULLET_CHARS):
-            bullets.append(line)
-        # Check for numbered bullets
-        elif len(line) > 2 and line[0].isdigit() and line[1] in ['.', ')']:
-            bullets.append(line)
+        is_bullet_start = False
+        
+        for pattern in bullet_patterns[:4]:  # Only check actual bullet starters, not continuation lines
+            if re.match(pattern, line):
+                is_bullet_start = True
+                bullet_start_indices.append(i)
+                potential_bullets.append(line)
+                break
+                
+        if not is_bullet_start and i > 0:
+            # Check for lines that are likely continuations of previous bullets
+            # This handles PDF parsing that breaks lines in the middle of a bullet point
+            prev_line = lines[i-1].strip()
+            
+            # If previous line ended without punctuation or is very short, this line may be a continuation
+            if prev_line and (
+                not prev_line[-1] in '.!?:;' or  # No ending punctuation
+                len(prev_line) < 40 or           # Previous line is short (likely a broken line)
+                not prev_line[0].isupper()       # Previous line doesn't start with a capital letter
+            ):
+                if i-1 in bullet_start_indices or (potential_bullets and len(potential_bullets) > 0):
+                    # Add to the last bullet as a continuation
+                    if potential_bullets:
+                        potential_bullets[-1] += ' ' + line
+    
+    # Second pass: consolidate multi-line bullets
+    current_bullet = ""
+    in_bullet = False
+    
+    for i, line in enumerate(lines):
+        line = line.strip()
+        if not line:
+            if in_bullet and current_bullet:
+                bullets.append(current_bullet)
+                current_bullet = ""
+                in_bullet = False
+            continue
+            
+        is_bullet_start = i in bullet_start_indices
+        
+        if is_bullet_start:
+            if in_bullet and current_bullet:
+                bullets.append(current_bullet)
+                current_bullet = ""
+            
+            current_bullet = line
+            in_bullet = True
+        elif in_bullet:
+            # Check if this is likely a continuation of the current bullet
+            if (
+                re.match(bullet_patterns[4], ' ' + line) or  # Indented continuation
+                not line[0].isupper() or                     # Doesn't start with uppercase (continuation)
+                not any(line.startswith(b) for b in '•-*→▪▸‣○·–—♦★»▶') or  # Not a new bullet
+                len(current_bullet) < 50                     # Current bullet is short (likely incomplete)
+            ):
+                current_bullet += ' ' + line
+            else:
+                # This looks like a new paragraph or section, not a bullet continuation
+                bullets.append(current_bullet)
+                current_bullet = line
+                in_bullet = False
+    
+    # Add the last bullet if we have one
+    if current_bullet:
+        bullets.append(current_bullet)
             
     return bullets
 
