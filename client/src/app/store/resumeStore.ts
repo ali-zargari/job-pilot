@@ -2,11 +2,26 @@ import { create } from 'zustand';
 
 export interface ResumeResult {
   score: number;
-  issues: string[];
+  issues?: string[];
+  lint_results?: {
+    issues: Array<{
+      message: string;
+      severity: string;
+      type: string;
+      text?: string;
+    }>;
+  };
   optimized: string;
   original: string;
-  draft?: string;
-  lint_results?: any;
+  rule_based?: string;
+  draft?: string; // Keep for backward compatibility
+  improvements?: string[];
+  optimized_with_ai?: boolean;
+  suggestions?: {
+    weak_verbs: string[];
+    formatting_issues: string[];
+    content_improvements: string[];
+  };
 }
 
 interface ResumeState {

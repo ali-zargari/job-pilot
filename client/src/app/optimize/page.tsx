@@ -266,18 +266,210 @@ export default function OptimizePage() {
                       </div>
                       
                       <div className="border-t border-gray-100 pt-4 mt-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Improvement Areas</h3>
-                        <ul className="space-y-3">
-                          {result.issues.map((issue: string, index: number) => (
-                            <li key={index} className="flex items-start">
-                              <span className="inline-flex items-center justify-center flex-shrink-0 w-5 h-5 mr-2 text-danger-500">
-                                <XCircleIcon className="w-5 h-5" />
-                              </span>
-                              <span className="text-gray-700">{issue}</span>
-                            </li>
-                          ))}
-                        </ul>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Resume Analysis</h3>
+                        {result.lint_results?.issues ? (
+                          <>
+                            {/* Positive feedback section */}
+                            <div className="mb-6">
+                              <h4 className="text-md font-medium text-gray-700 mb-3">Strengths</h4>
+                              <ul className="space-y-3">
+                                {result.lint_results.issues
+                                  .filter(issue => issue.severity === 'positive')
+                                  .map((issue, index) => (
+                                    <li key={index} className="flex flex-col bg-green-50 p-3 rounded-lg border border-green-100">
+                                      <div className="flex items-start">
+                                        <span className="inline-flex items-center justify-center flex-shrink-0 w-5 h-5 mr-2 text-green-500">
+                                          <CheckCircleIcon className="w-5 h-5" />
+                                        </span>
+                                        <span className="text-green-700">
+                                          {issue.message.includes("Examples:") 
+                                            ? issue.message.split("Examples:")[0] + "Examples:"
+                                            : issue.message}
+                                        </span>
+                                      </div>
+                                      
+                                      {issue.message.includes("Examples:") && (
+                                        <div className="mt-2 ml-7 bg-green-100 p-2 rounded">
+                                          <ul className="list-disc pl-5 text-sm text-green-700">
+                                            {issue.message
+                                              .split("Examples:")[1]
+                                              .split(";")
+                                              .filter(ex => ex.trim().length > 0)
+                                              .map((example, i) => (
+                                                <li key={i}>{example.replace("This helps demonstrate your impact.", "").trim()}</li>
+                                              ))}
+                                          </ul>
+                                        </div>
+                                      )}
+                                    </li>
+                                  ))}
+                                {result.lint_results.issues.filter(issue => issue.severity === 'positive').length === 0 && (
+                                  <li className="text-gray-500 italic p-3">No strengths identified. Let's improve your resume!</li>
+                                )}
+                              </ul>
+                            </div>
+
+                            {/* Improvement suggestions section */}
+                            <div>
+                              <h4 className="text-md font-medium text-gray-700 mb-3">Areas to Improve</h4>
+                              <ul className="space-y-3">
+                                {result.lint_results.issues
+                                  .filter(issue => issue.severity !== 'positive')
+                                  .map((issue, index) => (
+                                    <li key={index} className="flex items-start bg-red-50 p-3 rounded-lg border border-red-100">
+                                      <span className="inline-flex items-center justify-center flex-shrink-0 w-5 h-5 mr-2 text-red-500">
+                                        <XCircleIcon className="w-5 h-5" />
+                                      </span>
+                                      <span className="text-red-700">{issue.message}</span>
+                                    </li>
+                                  ))}
+                                {result.lint_results.issues.filter(issue => issue.severity !== 'positive').length === 0 && (
+                                  <li className="text-gray-700 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                    No issues found. Your resume looks great!
+                                  </li>
+                                )}
+                              </ul>
+                            </div>
+                          </>
+                        ) : result.issues?.length ? (
+                          // Old API format with direct issues array
+                          <ul className="space-y-3">
+                            {result.issues.map((issue: string, index: number) => (
+                              <li key={index} className="flex items-start bg-gray-50 p-3 rounded-lg">
+                                {issue.startsWith('✅') ? (
+                                  <span className="inline-flex items-center justify-center flex-shrink-0 w-5 h-5 mr-2 text-green-500">
+                                    <CheckCircleIcon className="w-5 h-5" />
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center justify-center flex-shrink-0 w-5 h-5 mr-2 text-red-500">
+                                    <XCircleIcon className="w-5 h-5" />
+                                  </span>
+                                )}
+                                <span className={issue.startsWith('✅') ? 'text-green-700' : 'text-red-700'}>
+                                  {issue.replace(/^(✅|❌|⚠️)\s*/, '')}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="rounded-lg bg-gray-50 p-4 border border-gray-200">
+                            <p className="text-gray-500 text-center">No analysis available. Try uploading a different resume.</p>
+                          </div>
+                        )}
                       </div>
+                      
+                      {/* Rule-based suggestions section */}
+                      {result.suggestions && (
+                        <div className="border-t border-gray-100 pt-4 mt-6">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-4">Rule-Based Suggestions</h3>
+                          
+                          {result.suggestions.weak_verbs.length > 0 && (
+                            <div className="mb-6 rounded-lg bg-orange-50 p-4 border border-orange-200">
+                              <div className="flex items-center mb-3">
+                                <span className="inline-block w-8 h-8 rounded-full bg-orange-100 mr-2 flex items-center justify-center">
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-orange-500">
+                                    <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32L19.513 8.2z" />
+                                  </svg>
+                                </span>
+                                <h4 className="text-md font-medium text-orange-700">Weak Verbs to Replace</h4>
+                              </div>
+                              <ul className="space-y-2 ml-10">
+                                {result.suggestions.weak_verbs.map((suggestion, index) => {
+                                  // Extract the verb to replace and context
+                                  const verbMatch = suggestion.match(/Replace '([^']+)' with '([^']+)' in context: '([^']+)'/);
+                                  if (verbMatch) {
+                                    const [_, weakVerb, strongVerb, context] = verbMatch;
+                                    return (
+                                      <li key={index} className="text-orange-700 text-sm">
+                                        <div className="flex flex-col">
+                                          <span>
+                                            Replace <span className="font-bold text-red-600">{weakVerb}</span> with <span className="font-bold text-green-600">{strongVerb}</span>
+                                          </span>
+                                          <span className="mt-1 pl-2 border-l-2 border-orange-300 italic bg-orange-100/50 p-1 rounded">
+                                            {context}
+                                          </span>
+                                        </div>
+                                      </li>
+                                    );
+                                  }
+                                  return (
+                                    <li key={index} className="text-orange-700 text-sm">
+                                      {suggestion}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          )}
+                          
+                          {result.suggestions.formatting_issues.length > 0 && (
+                            <div className="mb-6 rounded-lg bg-blue-50 p-4 border border-blue-200">
+                              <div className="flex items-center mb-3">
+                                <span className="inline-block w-8 h-8 rounded-full bg-blue-100 mr-2 flex items-center justify-center">
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-blue-500">
+                                    <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32L19.513 8.2z" />
+                                  </svg>
+                                </span>
+                                <h4 className="text-md font-medium text-blue-700">Formatting Issues</h4>
+                              </div>
+                              <ul className="space-y-2 ml-10">
+                                {result.suggestions.formatting_issues.map((suggestion, index) => (
+                                  <li key={index} className="text-blue-700 text-sm">
+                                    {suggestion}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          
+                          {result.suggestions.content_improvements.length > 0 && (
+                            <div className="mb-6 rounded-lg bg-green-50 p-4 border border-green-200">
+                              <div className="flex items-center mb-3">
+                                <span className="inline-block w-8 h-8 rounded-full bg-green-100 mr-2 flex items-center justify-center">
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-green-500">
+                                    <path d="M11.625 16.5a1.875 1.875 0 100-3.75 1.875 1.875 0 000 3.75z" />
+                                    <path fillRule="evenodd" d="M5.625 1.5H9a3.75 3.75 0 013.75 3.75v1.875c0 1.036.84 1.875 1.875 1.875H16.5a3.75 3.75 0 013.75 3.75v7.875c0 1.035-.84 1.875-1.875 1.875H5.625a1.875 1.875 0 01-1.875-1.875V3.375c0-1.036.84-1.875 1.875-1.875zm6 16.5c.66 0 1.277-.19 1.797-.518l1.048 1.048a.75.75 0 001.06-1.06l-1.047-1.048A3.375 3.375 0 1011.625 18z" clipRule="evenodd" />
+                                    <path d="M14.25 5.25a5.23 5.23 0 00-1.279-3.434 9.768 9.768 0 016.963 6.963A5.23 5.23 0 0016.5 7.5h-1.875a.375.375 0 01-.375-.375V5.25z" />
+                                  </svg>
+                                </span>
+                                <h4 className="text-md font-medium text-green-700">Content Improvements</h4>
+                              </div>
+                              <ul className="space-y-2 ml-10">
+                                {result.suggestions.content_improvements.map((suggestion, index) => {
+                                  // Try to extract the content to improve
+                                  const contentMatch = suggestion.match(/(Add quantifiable metrics to|Expand on this point to be more descriptive): '([^']+)'/);
+                                  if (contentMatch) {
+                                    const [_, action, context] = contentMatch;
+                                    return (
+                                      <li key={index} className="text-green-700 text-sm">
+                                        <div className="flex flex-col">
+                                          <span className="font-semibold">{action}</span>
+                                          <span className="mt-1 pl-2 border-l-2 border-green-300 italic bg-green-100/50 p-1 rounded">
+                                            {context}
+                                          </span>
+                                        </div>
+                                      </li>
+                                    );
+                                  }
+                                  return (
+                                    <li key={index} className="text-green-700 text-sm">
+                                      {suggestion}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          )}
+                          
+                          {result.suggestions.weak_verbs.length === 0 && 
+                           result.suggestions.formatting_issues.length === 0 && 
+                           result.suggestions.content_improvements.length === 0 && (
+                            <div className="rounded-lg bg-gray-50 p-4 border border-gray-200">
+                              <p className="text-gray-500 text-center">No rule-based suggestions found. Your resume is already well-optimized!</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

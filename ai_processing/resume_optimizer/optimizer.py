@@ -23,13 +23,23 @@ logger = logging.getLogger(__name__)
 try:
     from ai_processing.resume_gpt import enhance_resume, enhance_bullet
     from ai_processing.resume_lint import analyze_resume
-    from ai_processing.resume_lint.rules import check_weak_phrases, suggest_alternatives
+    from ai_processing.resume_lint.rules import (
+        check_weak_phrases, 
+        suggest_alternatives, 
+        get_rule_based_suggestions,
+        has_bullet_points
+    )
 except ImportError:
     try:
         # Try alternative import if package not installed
         from resume_gpt import enhance_resume, enhance_bullet
         from resume_lint import analyze_resume
-        from resume_lint.rules import check_weak_phrases, suggest_alternatives
+        from resume_lint.rules import (
+            check_weak_phrases, 
+            suggest_alternatives, 
+            get_rule_based_suggestions,
+            has_bullet_points
+        )
     except ImportError:
         logger.warning("Could not import resume_gpt or resume_lint modules. Some functionality may be limited.")
 
@@ -334,6 +344,9 @@ class ResumeOptimizer:
         if job_description:
             job_match_improvement = final_detailed_score.get("job_match_score", 0) - detailed_score.get("job_match_score", 0)
         
+        # Get rule-based suggestions for the original text
+        rule_based_suggestions = get_rule_based_suggestions(resume_text)
+        
         return {
             "original": resume_text,
             "rule_based": rule_based_text,
@@ -350,7 +363,8 @@ class ResumeOptimizer:
             "api_usage": 1 if used_ai else 0,
             "optimized_with_ai": used_ai,
             "needs_substantial_improvement": needs_substantial_improvement,
-            "changes_made": self._summarize_changes(resume_text, final_text)
+            "changes_made": self._summarize_changes(resume_text, final_text),
+            "suggestions": rule_based_suggestions  # Add rule-based suggestions
         }
     
     def _summarize_changes(self, original_text, optimized_text):
@@ -940,12 +954,33 @@ class ResumeOptimizer:
         metrics_pattern = r'\b(\d+(?:\.\d+)?%|\d+(?:\.\d+)?\s*(?:hours|days|weeks|months|years|people|team members|developers|engineers|clients|customers|users|projects|times|percent|million|billion|k|seconds|minutes))\b'
         original_metrics = re.findall(metrics_pattern, original_text, re.IGNORECASE)
         
+        # Get rule-based suggestions to provide to OpenAI
+        rule_suggestions = get_rule_based_suggestions(original_text)
+        
+        # Format suggestions as a string to include in the prompt
+        suggestion_text = ""
+        if rule_suggestions['weak_verbs']:
+            suggestion_text += "\n\nWeak verbs to replace:\n" + "\n".join(
+                [f"- {suggestion}" for suggestion in rule_suggestions['weak_verbs'][:5]]
+            )
+        
+        if rule_suggestions['content_improvements']:
+            suggestion_text += "\n\nContent improvements:\n" + "\n".join(
+                [f"- {suggestion}" for suggestion in rule_suggestions['content_improvements'][:5]]
+            )
+        
+        if rule_suggestions['formatting_issues']:
+            suggestion_text += "\n\nFormatting improvements:\n" + "\n".join(
+                [f"- {suggestion}" for suggestion in rule_suggestions['formatting_issues']]
+            )
+        
         # Use the resume_openai.rewrite_resume function instead of direct API calls
         result = rewrite_resume(
             resume_text=rule_based_text,
             job_description=job_description,
             skills=original_tech_stack,
-            api_key=self.openai_api_key
+            api_key=self.openai_api_key,
+            custom_instructions=f"Please apply these specific suggestions where appropriate: {suggestion_text}" if suggestion_text else None
         )
         
         # Extract the rewritten resume

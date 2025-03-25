@@ -157,7 +157,8 @@ def rewrite_resume(
     skills: Optional[List[str]] = None,
     api_key: Optional[str] = None,
     use_ai: bool = True,
-    avoid_fabricated_metrics: bool = True
+    avoid_fabricated_metrics: bool = True,
+    custom_instructions: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Rewrite a resume to improve its quality and job-matching.
@@ -169,6 +170,7 @@ def rewrite_resume(
         api_key: Optional API key override
         use_ai: Whether to use AI for enhancement or return only rule-based suggestions
         avoid_fabricated_metrics: Whether to avoid fabricating specific metrics
+        custom_instructions: Optional custom instructions to guide the AI rewrite
         
     Returns:
         Dictionary with rewritten resume and metadata
@@ -287,6 +289,10 @@ IMPORTANT ABOUT METRICS:
     # If job titles were extracted, add them to the prompt explicitly
     if job_titles:
         system_prompt += f"\n\nPRESERVE THESE EXACT JOB TITLES: {', '.join(job_titles)}"
+    
+    # Add custom instructions if provided
+    if custom_instructions:
+        system_prompt += f"\n\nADDITIONAL INSTRUCTIONS: {custom_instructions}"
     
     # Prepare user prompt
     prompt = f"Original resume:\n{resume_text}\n\n"

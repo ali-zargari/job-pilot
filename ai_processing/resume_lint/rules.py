@@ -284,3 +284,78 @@ def is_already_optimized(resume_text):
     )
     
     return is_optimized, evidence
+
+# WEAK_VERB_REPLACEMENTS constant should already exist somewhere in this file
+# If not, add this:
+WEAK_VERB_REPLACEMENTS = {
+    "responsible for": "managed",
+    "worked on": "developed",
+    "helped": "assisted with",
+    "part of": "contributed to",
+    "developed": "built",
+    "maintained": "managed",
+    "participated in": "contributed to",
+    "assisted": "supported",
+    "in charge of": "led",
+    "duties included": "delivered"
+}
+
+def get_rule_based_suggestions(resume_text):
+    """
+    Find suggestions for resume improvement using a purely rule-based approach.
+    
+    Args:
+        resume_text: Original resume text
+        
+    Returns:
+        dict: Dictionary of suggestions for resume improvement
+    """
+    suggestions = {
+        "weak_verbs": [],
+        "formatting_issues": [],
+        "content_improvements": []
+    }
+    
+    # Find weak verbs that could be replaced
+    for weak_verb, strong_verb in WEAK_VERB_REPLACEMENTS.items():
+        # Look for weak verbs at the start of bullet points
+        pattern = r'(•\s*)' + weak_verb
+        matches = re.finditer(pattern, resume_text, flags=re.IGNORECASE)
+        for match in matches:
+            original_text = match.group(0)
+            suggestion = f"Replace '{weak_verb}' with '{strong_verb}' in '{original_text}'"
+            suggestions["weak_verbs"].append(suggestion)
+        
+        # Also look for these phrases in general, not just at bullet points
+        general_matches = re.finditer(r'\b' + weak_verb + r'\b', resume_text, flags=re.IGNORECASE)
+        for match in general_matches:
+            # Extract the context (part of the line containing the weak verb)
+            line_start = max(0, match.start() - 20)
+            line_end = min(len(resume_text), match.end() + 20)
+            context = resume_text[line_start:line_end]
+            suggestion = f"Replace '{weak_verb}' with '{strong_verb}' in context: '...{context}...'"
+            if suggestion not in suggestions["weak_verbs"]:
+                suggestions["weak_verbs"].append(suggestion)
+    
+    # Find formatting issues
+    # Check for bullet points without spaces
+    inconsistent_bullets = re.findall(r'•(\S)', resume_text)
+    if inconsistent_bullets:
+        suggestions["formatting_issues"].append("Ensure consistent spacing after bullet points")
+    
+    # Check for excessive line breaks
+    if re.search(r'\n{3,}', resume_text):
+        suggestions["formatting_issues"].append("Normalize spacing between sections to be consistent")
+    
+    # Content improvement suggestions (basic rule-based checks)
+    bullet_points = re.findall(r'•\s*(.*?)(?=\n•|\n\n|\Z)', resume_text, re.DOTALL)
+    for point in bullet_points:
+        # Check for bullet points without numbers/metrics
+        if not re.search(r'\d+', point):
+            suggestions["content_improvements"].append(f"Add quantifiable metrics to: '{point.strip()}'")
+        
+        # Check for bullet points that are too short
+        if len(point.strip()) < 30:
+            suggestions["content_improvements"].append(f"Expand on this point to be more descriptive: '{point.strip()}'")
+    
+    return suggestions

@@ -51,10 +51,12 @@ class Suggestion(BaseModel):
 class OptimizationResponse(BaseModel):
     """Model for optimization response"""
     original: str = Field(..., description="Original resume text")
-    draft: str = Field(..., description="Initial AI draft")
+    rule_based: str = Field(..., description="Initial rule-based draft")
     optimized: str = Field(..., description="Final optimized text")
     score: int = Field(..., description="Resume score")
     lint_results: Dict = Field(..., description="Detailed analysis results")
+    suggestions: Optional[Dict] = Field(None, description="Rule-based suggestions for improvement")
+    improvements: Optional[List[str]] = Field(None, description="AI-generated improvements")
     
 class SuggestionRequest(BaseModel):
     """Model for getting improvement suggestions"""

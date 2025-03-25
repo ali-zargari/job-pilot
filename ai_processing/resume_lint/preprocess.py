@@ -1,5 +1,6 @@
 import spacy
 from . import rules
+import re
 
 # Load the English NLP model
 nlp = spacy.load("en_core_web_sm")
@@ -73,23 +74,11 @@ class ResumeAnalyzer:
         # Check if the resume is already optimized
         is_optimized, optimization_evidence = rules.is_already_optimized(resume_text)
         
+        # Extract rule-based suggestions
+        rule_based_suggestions = rules.get_rule_based_suggestions(resume_text)
+        
         issues = []
         score = 100  # Start with a perfect score
-        
-        # If resume is already optimized, provide positive feedback and return early
-        if is_optimized:
-            return {
-                "score": 95,  # High but not perfect score
-                "issues": [],  # No issues to report
-                "feedback": "✅ Your resume is already well-optimized! It has strong action verbs, quantifiable achievements, and proper formatting.",
-                "improvement_count": {
-                    "high": 0,
-                    "medium": 0,
-                    "low": 0
-                },
-                "is_already_optimized": True,
-                "optimization_evidence": optimization_evidence
-            }
         
         # Step 1: Check ATS-friendliness (high priority) using original text to preserve formatting
         if rules.check_ats_friendly(resume_text):
@@ -217,36 +206,105 @@ class ResumeAnalyzer:
             issues.append({
                 "severity": "high",
                 "type": "format",
-                "message": "❌ Your resume doesn't have bullet points. Add bullet points for better readability.",
+                "message": "⚠️ Consider adding more bullet points to highlight your achievements and improve readability.",
                 "text": resume_text[:100] + "..."
             })
-            score -= 10
+            score -= 5
         
-        # Add insights about positive aspects if there are few issues
-        if len(issues) <= 2:
-            # Provide positive reinforcement for what's already good
-            strong_verbs = optimization_evidence['strong_verbs']
-            if strong_verbs:
-                # Pick up to 3 strong verbs to highlight
-                highlighted_verbs = strong_verbs[:3]
-                verb_text = ", ".join(highlighted_verbs)
-                issues.append({
-                    "severity": "positive",
-                    "type": "strong_verbs",
-                    "message": f"✅ Good use of strong action verbs like '{verb_text}'. Continue using impactful language."
-                })
+        # Add strengths based on evidence
+        strengths = []
+        
+        # Add strong action verbs as a strength
+        strong_verbs = optimization_evidence['strong_verbs']
+        if strong_verbs:
+            # Pick up to 3 strong verbs to highlight
+            highlighted_verbs = strong_verbs[:3]
+            strengths.append({
+                "severity": "positive",
+                "type": "strong_verbs",
+                "message": f"✅ Good use of strong action verbs like '{', '.join(highlighted_verbs)}'. Continue using impactful language.",
+                "text": resume_text[:100] + "..."
+            })
+            score += 5
+        
+        # Add quantifiable achievements as a strength
+        if optimization_evidence.get('quantifiable_achievements'):
+            # Extract examples of quantifiable achievements
+            quantifiable_examples = []
+            # Look for numbers followed by % or other indicators of metrics
+            patterns = [
+                r'\d+\s*%',                   # Percentage
+                r'\$\s*\d+',                  # Dollar amounts
+                r'\d+\s*x',                   # Multiplier
+                r'by\s+\d+',                  # "by X" phrases
+                r'improved\s+\w+\s+by\s+\d+', # "improved X by Y"
+                r'increased\s+\w+\s+by\s+\d+', # "increased X by Y"
+                r'reduced\s+\w+\s+by\s+\d+',  # "reduced X by Y"
+                r'generated\s+\$?\d+',        # "generated $X"
+                r'team\s+of\s+\d+',           # Team size
+                r'\d+\s+hours',               # Time measurements
+                r'\d+\s+members',             # Team members
+            ]
             
-            if optimization_evidence['quantifiable_achievements']:
-                issues.append({
-                    "severity": "positive",
-                    "type": "achievements",
-                    "message": "✅ Excellent use of quantifiable achievements. This helps demonstrate your impact."
-                })
+            for pattern in patterns:
+                matches = re.findall(pattern, resume_text, re.IGNORECASE)
+                if matches:
+                    for match in matches[:2]:  # Limit to first 2 examples
+                        # Get some context around the match
+                        match_index = resume_text.lower().find(match.lower())
+                        if match_index >= 0:
+                            # Get up to 20 chars before and after for context
+                            start = max(0, match_index - 20)
+                            end = min(len(resume_text), match_index + len(match) + 20)
+                            context = resume_text[start:end].strip()
+                            # Clean up the context
+                            if start > 0:
+                                context = "..." + context
+                            if end < len(resume_text):
+                                context = context + "..."
+                            quantifiable_examples.append(context)
+            
+            # Create message with examples
+            metric_message = "✅ Excellent use of quantifiable achievements."
+            if quantifiable_examples:
+                metric_message += " Examples: " + "; ".join(quantifiable_examples[:2])
+            metric_message += " This helps demonstrate your impact."
+            
+            strengths.append({
+                "severity": "positive",
+                "type": "metrics",
+                "message": metric_message,
+                "text": resume_text[:100] + "..."
+            })
+            score += 5
         
-        # Final feedback based on score
+        # If there are no detected strengths but the resume has content,
+        # add a generic strength to encourage the user
+        if not strengths and len(resume_text) > 500:
+            strengths.append({
+                "severity": "positive",
+                "type": "structure",
+                "message": "✅ Your resume has a clear structure that provides a good foundation to build upon.",
+                "text": resume_text[:100] + "..."
+            })
+        
+        # Combine strengths with issues
+        all_issues = strengths + issues
+        
+        # If there are no issues but there are rule-based suggestions,
+        # add a generic improvement area
+        if not issues and (rule_based_suggestions['weak_verbs'] or rule_based_suggestions['content_improvements']):
+            all_issues.append({
+                "severity": "low",
+                "type": "general",
+                "message": "⚠️ Your resume is good, but could be strengthened with more impactful language.",
+                "text": resume_text[:100] + "..."
+            })
+        
+        # Generate feedback based on score
         feedback = ""
         if score >= 90:
-            feedback = "✅ Your resume is well-structured with minimal issues. Keep up the good work!"
+            feedback = "✅ Your resume is well-structured with minimal issues. Check out the rule-based suggestions for further improvements!"
         elif score >= 75:
             feedback = "⚠️ Your resume is decent but could use some targeted improvements in clarity and impact."
         else:
@@ -254,16 +312,17 @@ class ResumeAnalyzer:
         
         return {
             "score": score,
-            "issues": issues,
+            "issues": all_issues,
             "feedback": feedback,
             "improvement_count": {
                 "high": len([i for i in issues if i["severity"] == "high"]),
                 "medium": len([i for i in issues if i["severity"] == "medium"]),
                 "low": len([i for i in issues if i["severity"] == "low"]),
-                "positive": len([i for i in issues if i["severity"] == "positive"])
+                "positive": len(strengths)
             },
-            "is_already_optimized": False,
-            "optimization_evidence": optimization_evidence
+            "is_already_optimized": is_optimized,
+            "optimization_evidence": optimization_evidence,
+            "suggestions": rule_based_suggestions
         }
 
 # Create a singleton instance
