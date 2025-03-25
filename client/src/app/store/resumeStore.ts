@@ -17,6 +17,11 @@ export interface ResumeResult {
   draft?: string; // Keep for backward compatibility
   improvements?: string[];
   optimized_with_ai?: boolean;
+  original_format?: {
+    filename: string;
+    filetype: string;
+    pdfMetadata: any;
+  };
   suggestions?: {
     weak_verbs: string[];
     formatting_issues: string[];

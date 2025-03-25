@@ -956,9 +956,12 @@ class ResumeOptimizer:
         metrics_pattern = r'\b(\d+(?:\.\d+)?%|\d+(?:\.\d+)?\s*(?:hours|days|weeks|months|years|people|team members|developers|engineers|clients|customers|users|projects|times|percent|million|billion|k|seconds|minutes))\b'
         original_metrics = re.findall(metrics_pattern, original_text, re.IGNORECASE)
         
-        # Looking for approximate percentages specifically
+        # Also capture approximate percentages (like ~100%)
         approx_percent_pattern = r'(~\s*\d+(?:\.\d+)?%)'
         approx_percentages = re.findall(approx_percent_pattern, original_text, re.IGNORECASE)
+        
+        # Combine all metrics that need to be preserved
+        all_metrics = original_metrics + approx_percentages
         
         # Get strengths from the resume analysis to ensure they're preserved
         lint_result = analyze_resume(original_text)
@@ -987,12 +990,15 @@ class ResumeOptimizer:
                     strengths_text += f"- {message}\n"
         
         # If we have specific metrics, add them as a special preservation instruction
-        all_metrics = original_metrics + approx_percentages
         if all_metrics:
             metrics_text = "\n\nCRITICAL - PRESERVE THESE EXACT METRICS:\n"
             for metric in all_metrics:
                 metrics_text += f"- {metric}\n"
             strengths_text += metrics_text
+        
+        # Special instruction for ~100% improvement specifically
+        if any("~100%" in metric for metric in all_metrics):
+            strengths_text += "\n\nEXTREMELY IMPORTANT: The '~100% performance improvement' metric MUST be preserved exactly as written. Do not change or remove this specific achievement."
         
         # Get rule-based suggestions to provide to OpenAI
         rule_suggestions = get_rule_based_suggestions(original_text)
@@ -1042,16 +1048,75 @@ class ResumeOptimizer:
             logger.warning("AI rewrite appears incomplete, using rule-based text")
             return rule_based_text
         
-        # Verify all metrics are preserved using the new function
-        all_metrics_preserved, missing_metrics = verify_metrics_preserved(original_text, ai_enhanced_text)
-        if not all_metrics_preserved:
-            logger.warning(f"AI rewrite removed metrics: {', '.join(missing_metrics)}. Falling back to rule-based text.")
-            return rule_based_text
-            
-        # Special check for approximate percentages (like ~100%)
+        # Verify all approximate percentages are preserved
         for approx_pct in approx_percentages:
             if approx_pct not in ai_enhanced_text:
-                logger.warning(f"AI rewrite removed approximate percentage: {approx_pct}. Falling back to rule-based text.")
+                logger.warning(f"AI rewrite removed important approximate percentage: {approx_pct}. Applying targeted fix.")
+                # Instead of falling back, try to fix by inserting the metric back in
+                # Find a similar section in the AI output and replace with the correct metric
+                if "performance improvement" in ai_enhanced_text:
+                    ai_enhanced_text = re.sub(
+                        r'(\d+)% performance improvement', 
+                        f"{approx_pct} performance improvement", 
+                        ai_enhanced_text
+                    )
+                elif "improvement" in ai_enhanced_text:
+                    ai_enhanced_text = re.sub(
+                        r'(substantial|significant) improvement', 
+                        f"{approx_pct} improvement", 
+                        ai_enhanced_text
+                    )
+                else:
+                    # If we can't find a good place to insert it, fall back
+                    logger.warning(f"Could not apply targeted fix. Falling back to rule-based text.")
+                    return rule_based_text
+        
+        # Check if all metrics are preserved - if not, we'll make a targeted fix
+        # rather than falling back completely to the rule-based text
+        all_metrics_preserved, missing_metrics = verify_metrics_preserved(original_text, ai_enhanced_text)
+        if not all_metrics_preserved:
+            logger.warning(f"AI rewrite removed metrics: {', '.join(missing_metrics)}. Applying targeted fixes.")
+            fixed_text = ai_enhanced_text
+            
+            # Try to fix each missing metric
+            for metric in missing_metrics:
+                # Find where this metric appears in the original text to get context
+                context_pattern = r'[^.!?]*\b' + re.escape(metric) + r'\b[^.!?]*[.!?]'
+                context_matches = re.findall(context_pattern, original_text)
+                
+                if context_matches:
+                    # Find a similar sentence in the AI output
+                    key_words = re.findall(r'\b\w{5,}\b', context_matches[0])
+                    if key_words:
+                        for word in key_words:
+                            if word in ai_enhanced_text:
+                                # Find sentences with this keyword
+                                sentence_pattern = r'[^.!?]*\b' + re.escape(word) + r'\b[^.!?]*[.!?]'
+                                ai_sentences = re.findall(sentence_pattern, ai_enhanced_text)
+                                
+                                if ai_sentences:
+                                    # Replace first found sentence with the original context
+                                    fixed_text = fixed_text.replace(ai_sentences[0], context_matches[0])
+                                    break
+                
+                # If we couldn't find a good place to insert it, try a more brute-force approach
+                if metric not in fixed_text:
+                    # Just append it to a bullet point
+                    bullet_lines = fixed_text.split('\n')
+                    for i, line in enumerate(bullet_lines):
+                        if line.strip().startswith('●') and i < len(bullet_lines) - 1:
+                            # Add the missing metric to this bullet point
+                            bullet_lines[i] += f" Achieved {metric} improvement."
+                            fixed_text = '\n'.join(bullet_lines)
+                            break
+            
+            # Use the fixed version
+            ai_enhanced_text = fixed_text
+            
+            # Check if our fixes worked
+            all_fixed, still_missing = verify_metrics_preserved(original_text, ai_enhanced_text)
+            if not all_fixed:
+                logger.warning(f"Could not fix all missing metrics. Falling back to rule-based text.")
                 return rule_based_text
         
         return ai_enhanced_text

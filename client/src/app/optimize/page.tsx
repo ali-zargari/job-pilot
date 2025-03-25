@@ -12,6 +12,7 @@ import { Progress } from '@/components/ui/Progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import axios from 'axios';
 import ResumeViewer from '@/components/ui/ResumeViewer';
+import ResumePdfExporter from '@/components/ui/ResumePdfExporter';
 
 // Add a function to estimate if content will fit on one page
 const estimatePageFit = (content: string): boolean => {
@@ -508,106 +509,121 @@ export default function OptimizePage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <Tabs defaultValue="optimized" onValueChange={(value) => setCurrentView(value as any)}>
-                      <TabsList className="mb-4">
-                        <TabsTrigger value="optimized">Optimized Resume</TabsTrigger>
-                        <TabsTrigger value="rule_based">Rule-Based</TabsTrigger>
-                        <TabsTrigger value="original">Original</TabsTrigger>
-                      </TabsList>
-                      
-                      <TabsContent value="optimized" className="mt-0">
-                        {result.optimized && (
-                          <>
-                            <ResumeViewer 
-                              content={result.optimized} 
-                              isEditable={true}
-                              onUpdate={(newContent) => {
-                                setResult({
-                                  ...result,
-                                  optimized: newContent
-                                });
-                              }}
-                            />
-                            {!estimatePageFit(result.optimized) && (
-                              <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
-                                <strong>Warning:</strong> Your resume may exceed one page. Consider trimming content for better ATS compatibility.
+                    <div className="space-y-4">
+                      <Tabs defaultValue="optimized" onValueChange={(value) => setCurrentView(value as any)}>
+                        <TabsList className="mb-4">
+                          <TabsTrigger value="optimized">Optimized Resume</TabsTrigger>
+                          <TabsTrigger value="rule_based">Rule-Based</TabsTrigger>
+                          <TabsTrigger value="original">Original</TabsTrigger>
+                        </TabsList>
+                        
+                        <TabsContent value="optimized" className="mt-0">
+                          {result.optimized && (
+                            <>
+                              <ResumeViewer 
+                                content={result.optimized} 
+                                isEditable={true}
+                                onUpdate={(newContent) => {
+                                  setResult({
+                                    ...result,
+                                    optimized: newContent
+                                  });
+                                }}
+                              />
+                              <div className="mt-4 flex justify-between items-center">
+                                <div>
+                                  {!estimatePageFit(result.optimized) && (
+                                    <div className="p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                                      <strong>Warning:</strong> Your resume may exceed one page. Consider trimming content.
+                                    </div>
+                                  )}
+                                </div>
+                                <ResumePdfExporter 
+                                  content={result.optimized} 
+                                  originalFormat={result.original_format}
+                                  filename={`resume-optimized.pdf`}
+                                  version="optimized"
+                                />
                               </div>
-                            )}
-                          </>
-                        )}
-                      </TabsContent>
-                      
-                      <TabsContent value="rule_based" className="mt-0">
-                        {result.rule_based && (
-                          <>
-                            <ResumeViewer 
-                              content={result.rule_based} 
-                              isEditable={true}
-                              onUpdate={(newContent) => {
-                                setResult({
-                                  ...result,
-                                  rule_based: newContent
-                                });
-                              }}
-                            />
-                            {!estimatePageFit(result.rule_based) && (
-                              <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
-                                <strong>Warning:</strong> Your resume may exceed one page. Consider trimming content for better ATS compatibility.
+                            </>
+                          )}
+                        </TabsContent>
+                        
+                        <TabsContent value="rule_based" className="mt-0">
+                          {result.rule_based && (
+                            <>
+                              <ResumeViewer 
+                                content={result.rule_based} 
+                                isEditable={true}
+                                onUpdate={(newContent) => {
+                                  setResult({
+                                    ...result,
+                                    rule_based: newContent
+                                  });
+                                }}
+                              />
+                              <div className="mt-4 flex justify-between items-center">
+                                <div>
+                                  {!estimatePageFit(result.rule_based) && (
+                                    <div className="p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                                      <strong>Warning:</strong> Your resume may exceed one page. Consider trimming content.
+                                    </div>
+                                  )}
+                                </div>
+                                <ResumePdfExporter 
+                                  content={result.rule_based} 
+                                  originalFormat={result.original_format}
+                                  filename={`resume-rule-based.pdf`}
+                                  version="rule-based"
+                                />
                               </div>
-                            )}
-                          </>
-                        )}
-                      </TabsContent>
-                      
-                      <TabsContent value="original" className="mt-0">
-                        {result.original && (
-                          <>
-                            <ResumeViewer 
-                              content={result.original} 
-                              isEditable={false}
-                            />
-                            {!estimatePageFit(result.original) && (
-                              <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
-                                <strong>Warning:</strong> Your resume may exceed one page. Consider trimming content for better ATS compatibility.
+                            </>
+                          )}
+                        </TabsContent>
+                        
+                        <TabsContent value="original" className="mt-0">
+                          {result.original && (
+                            <>
+                              <ResumeViewer 
+                                content={result.original} 
+                                isEditable={false}
+                              />
+                              <div className="mt-4 flex justify-between items-center">
+                                <div>
+                                  {!estimatePageFit(result.original) && (
+                                    <div className="p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                                      <strong>Warning:</strong> Your resume may exceed one page. Consider trimming content.
+                                    </div>
+                                  )}
+                                </div>
+                                <ResumePdfExporter 
+                                  content={result.original} 
+                                  originalFormat={result.original_format}
+                                  filename={`resume-original.pdf`}
+                                  version="original"
+                                />
                               </div>
-                            )}
-                          </>
-                        )}
-                      </TabsContent>
-                    </Tabs>
+                            </>
+                          )}
+                        </TabsContent>
+                      </Tabs>
+                    </div>
                     
                     <div className="mt-4">
-                      <Button
-                        onClick={() => {
-                          if (!result || !currentView || !result[currentView]) return;
-                          
-                          const element = document.createElement('a');
-                          const content = String(result[currentView] || '');
-                          const file = new Blob([content], { type: 'text/plain' });
-                          element.href = URL.createObjectURL(file);
-                          element.download = `resume-${currentView}.txt`;
-                          document.body.appendChild(element);
-                          element.click();
-                          document.body.removeChild(element);
-                        }}
-                        className="w-full"
-                      >
-                        Download {(currentView || 'optimized').charAt(0).toUpperCase() + (currentView || 'optimized').slice(1)} Version
-                      </Button>
+                      <CardFooter className="flex justify-between">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setFile(null);
+                            setJobDescription('');
+                            setStep(1);
+                          }}
+                        >
+                          Start Over
+                        </Button>
+                      </CardFooter>
                     </div>
                   </CardContent>
-                  <CardFooter className="flex justify-between">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setFile(null);
-                        setJobDescription('');
-                        setStep(1);
-                      }}
-                    >
-                      Start Over
-                    </Button>
-                  </CardFooter>
                 </Card>
               </>
             )}

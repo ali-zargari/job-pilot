@@ -55,59 +55,202 @@ const ResumeViewer: React.FC<ResumeViewerProps> = ({
   const formatContent = (text: string) => {
     // Split into lines
     const lines = text.split('\n');
+    const formattedLines = [];
     
-    // Process each line to identify bullet points, sections, etc.
-    return lines.map((line, index) => {
-      line = line.trim();
+    // Process the content line by line for enhanced formatting
+    let nameProcessed = false;
+    let contactInfoLines = [];
+    let inSection = false;
+    let inSubSection = false;
+    let seenFirstHeader = false;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
       
       if (!line) {
-        return <div key={index} className="h-4"></div>;
+        formattedLines.push(<div key={`empty-${i}`} className="h-4"></div>);
+        continue;
       }
       
-      // Format section headers (all caps)
-      if (line.toUpperCase() === line && line.length > 2 && line.length <= 30) {
-        return (
-          <div key={index} className="text-lg font-bold mt-4 mb-2 text-gray-800">
-            {line}
+      // Clean up any formatting markers if present
+      let cleanLine = line
+        .replace(/<HEADER>(.*?)<\/HEADER>/g, '$1')
+        .replace(/<SUBHEADER>(.*?)<\/SUBHEADER>/g, '$1')
+        .replace(/<BULLET>/g, '')
+        .replace(/<INDENT level="\d+">(.*?)<\/INDENT>/g, '$1');
+      
+      // Get indentation level if present
+      let indentLevel = 0;
+      const indentMatch = line.match(/<INDENT level="(\d+)">/);
+      if (indentMatch) {
+        indentLevel = parseInt(indentMatch[1]);
+      }
+      
+      // Check for headers (all caps)
+      const isHeader = line.includes('<HEADER>') || 
+                    (line === line.toUpperCase() && line.length > 2 && line.length <= 30);
+      
+      // Check for sub-headers (usually ending with colon)
+      const isSubHeader = line.includes('<SUBHEADER>') || 
+                       (line.endsWith(':') || line.endsWith('_')) && line.length < 50;
+      
+      // Check for bullet points
+      const isBulletPoint = line.startsWith('•') || line.startsWith('-') || line.startsWith('*');
+      
+      // Handle name (first line)
+      if (!nameProcessed) {
+        formattedLines.push(
+          <div key="name" className="text-xl font-bold text-center mb-1">
+            {cleanLine}
           </div>
         );
+        nameProcessed = true;
+        continue;
       }
       
-      // Format subsection headers (typically mixed case, likely to have trailing ':')
-      if ((line.endsWith(':') || line.endsWith('_')) && line.length < 50) {
-        return (
-          <div key={index} className="font-semibold mt-3 mb-1 text-gray-700">
-            {line}
-          </div>
-        );
-      }
-      
-      // Handle bullet points
-      if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*')) {
-        return (
-          <div key={index} className="pl-5 relative my-1 text-sm">
-            <span className="absolute left-0">{line.charAt(0)}</span>
-            <span>{line.substring(1).trim()}</span>
-          </div>
-        );
-      }
-      
-      // Handle numbered bullet points
-      if (/^\d+[.)]/.test(line)) {
-        const match = line.match(/^(\d+[.)])\s*(.*)$/);
-        if (match) {
-          return (
-            <div key={index} className="pl-5 relative my-1 text-sm">
-              <span className="absolute left-0">{match[1]}</span>
-              <span>{match[2]}</span>
+      // Handle contact info (next few lines until a header)
+      if (nameProcessed && contactInfoLines.length < 2 && !isHeader) {
+        contactInfoLines.push(cleanLine);
+        
+        // If next line is a header or we're at the end, render contact info
+        if (i + 1 >= lines.length || 
+            lines[i+1].includes('<HEADER>') || 
+            lines[i+1].toUpperCase() === lines[i+1]) {
+          formattedLines.push(
+            <div key="contact-info" className="text-sm text-gray-600 text-center mb-4">
+              {contactInfoLines.join(' • ')}
             </div>
           );
+          
+          // Reset for the rest of the resume
+          contactInfoLines = [];
+        }
+        continue;
+      }
+      
+      // Handle section headers (all caps)
+      if (isHeader) {
+        inSection = true;
+        inSubSection = false;
+        seenFirstHeader = true;
+        
+        // Extract header text if it's in a tag
+        const headerText = line.replace(/<HEADER>(.+?)(<\/HEADER>)?/g, '$1').trim();
+        
+        formattedLines.push(
+          <div 
+            key={`header-${i}`} 
+            className="text-lg font-bold mt-5 mb-2 text-gray-800 border-b border-gray-300 pb-1"
+          >
+            {headerText}
+          </div>
+        );
+        continue;
+      }
+      
+      // Skip </HEADER> closing tags
+      if (line.includes('</HEADER>')) {
+        continue;
+      }
+      
+      // Handle project titles with underscores
+      if (/(.+?)_{3,}(.+?)$/.test(line)) {
+        // This looks like "Project Name_______________Date"
+        const parts = line.split(/_{3,}/);
+        if (parts.length >= 2) {
+          const projectTitle = parts[0].trim();
+          const projectDate = parts[1].trim();
+          
+          formattedLines.push(
+            <div key={`project-${i}`} className="flex justify-between items-center mt-4 mb-1">
+              <span className="font-semibold text-gray-700">{projectTitle}</span>
+              <span className="text-sm text-gray-600 italic">{projectDate}</span>
+            </div>
+          );
+          continue;
         }
       }
       
+      // Handle subsection headers
+      if (isSubHeader && !line.includes('_____')) {
+        inSubSection = true;
+        
+        // Remove trailing underscores for display
+        const displayLine = cleanLine.replace(/_{3,}$/, '');
+        
+        formattedLines.push(
+          <div 
+            key={`subheader-${i}`} 
+            className="font-semibold mt-3 mb-1 text-gray-700"
+          >
+            <span>{displayLine}</span>
+          </div>
+        );
+        continue;
+      }
+      
+      // Handle company names and job titles (all caps after first header)
+      if (seenFirstHeader && !isBulletPoint && cleanLine === cleanLine.toUpperCase() && cleanLine.length > 2) {
+        formattedLines.push(
+          <div 
+            key={`company-${i}`}
+            className="font-semibold mt-4 mb-1 text-gray-800"
+          >
+            {cleanLine}
+          </div>
+        );
+        continue;
+      }
+      
+      // Handle job title or position (not all caps, follows company)
+      if (seenFirstHeader && !isBulletPoint && cleanLine !== cleanLine.toUpperCase() && 
+          i > 0 && lines[i-1].toUpperCase() === lines[i-1]) {
+        formattedLines.push(
+          <div
+            key={`position-${i}`}
+            className="mb-2"
+          >
+            {cleanLine}
+          </div>
+        );
+        continue;
+      }
+      
+      // Handle bullet points
+      if (isBulletPoint) {
+        const bulletText = cleanLine.substring(1).trim();
+        formattedLines.push(
+          <div key={`bullet-${i}`} className="pl-5 relative my-1 text-sm">
+            <span className="absolute left-0">{cleanLine.charAt(0)}</span>
+            <span>{bulletText}</span>
+          </div>
+        );
+        continue;
+      }
+      
+      // Handle indented text
+      if (indentLevel > 0) {
+        formattedLines.push(
+          <div 
+            key={`indent-${i}`} 
+            className="text-sm my-1" 
+            style={{ marginLeft: `${indentLevel * 16}px` }}
+          >
+            {cleanLine}
+          </div>
+        );
+        continue;
+      }
+      
       // Regular text
-      return <div key={index} className="my-1 text-sm">{line}</div>;
-    });
+      formattedLines.push(
+        <div key={`text-${i}`} className="my-1 text-sm">
+          {cleanLine}
+        </div>
+      );
+    }
+    
+    return formattedLines;
   };
   
   // Handle saving edits
