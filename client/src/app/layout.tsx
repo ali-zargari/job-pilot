@@ -3,6 +3,9 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { Toaster } from 'react-hot-toast';
+import { NextUIProvider } from '@nextui-org/react';
+import { ThemeProvider } from 'next-themes';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -21,15 +24,25 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="light">
       <body className={inter.className}>
-        <div className="flex flex-col min-h-screen">
-          <Navbar />
-          <main className="flex-grow">
-            {children}
-          </main>
-          <Footer />
-        </div>
+        <NextUIProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="light"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <div className="flex flex-col min-h-screen">
+              <Navbar />
+              <main className="flex-grow">
+                {children}
+              </main>
+              <Footer />
+            </div>
+            <Toaster position="bottom-right" />
+          </ThemeProvider>
+        </NextUIProvider>
       </body>
     </html>
   );

@@ -68,6 +68,16 @@ export default function Navbar() {
                 Optimize Resume
               </Link>
               <Link 
+                href="/resume-builder"
+                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+                  isActive('/resume-builder') 
+                    ? 'border-primary-500 text-gray-900' 
+                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                }`}
+              >
+                Resume Builder
+              </Link>
+              <Link 
                 href="/pricing"
                 className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
                   isActive('/pricing') 
@@ -174,6 +184,16 @@ export default function Navbar() {
               } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
             >
               Optimize Resume
+            </Link>
+            <Link 
+              href="/resume-builder"
+              className={`${
+                isActive('/resume-builder') 
+                  ? 'bg-primary-50 border-primary-500 text-primary-700' 
+                  : 'border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700'
+              } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
+            >
+              Resume Builder
             </Link>
             <Link 
               href="/pricing"

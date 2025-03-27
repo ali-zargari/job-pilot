@@ -28,7 +28,7 @@ export default function Home() {
             Get detailed insights and ATS-proof improvements instantly.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="xl" animated variant="premium" withIcon className="group">
+            <Button size="xl" className="group flex items-center gap-2 bg-secondary-600 text-white hover:bg-secondary-700">
               Try it free <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
             </Button>
             <Button size="xl" variant="outline" className="bg-white/10 text-white border-white/20 hover:bg-white/20">
@@ -166,7 +166,7 @@ export default function Home() {
                     <span className="text-sm">Software Engineer</span>
                     <span className="text-sm font-medium">86%</span>
                   </div>
-                  <Progress value={86} variant="primary" size="sm" />
+                  <Progress value={86} variant="warning" size="sm" />
                   
                   <div className="flex justify-between items-center mt-2">
                     <span className="text-sm">Product Manager</span>
@@ -199,6 +199,73 @@ export default function Home() {
                 <Button fullWidth>Generate Cover Letter</Button>
               </CardContent>
             </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* Resume Builder Promo Section */}
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gray-50">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <Badge variant="warning" className="mb-4">New Feature</Badge>
+              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+                Build beautiful resumes with our template builder
+              </h2>
+              <p className="text-xl text-gray-500 mb-6">
+                Choose from professionally designed templates, customize every detail, and export a polished resume in minutes. Our template builder makes it easy to create a stunning resume that stands out.
+              </p>
+              <ul className="space-y-3 mb-8">
+                {[
+                  'Modern, professional templates designed by experts',
+                  'Easy drag-and-drop customization for all sections',
+                  'Export to PDF in one click',
+                  'ATS-friendly formatting guaranteed'
+                ].map((feature, i) => (
+                  <li key={i} className="flex items-center gap-3">
+                    <div className="h-6 w-6 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center flex-shrink-0">
+                      <Check className="h-4 w-4" />
+                    </div>
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
+              <Link href="/resume-builder">
+                <Button size="lg" className="group flex items-center gap-2">
+                  Try Template Builder <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                </Button>
+              </Link>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+              {/* Placeholder for resume template preview */}
+              <div className="aspect-[8.5/11] bg-white rounded-lg overflow-hidden shadow-sm border border-gray-100 flex flex-col">
+                <div className="h-24 bg-primary-600 p-6">
+                  <div className="h-8 w-48 bg-white/20 rounded-md"></div>
+                </div>
+                <div className="flex-grow p-6 space-y-4">
+                  <div className="h-4 w-32 bg-gray-200 rounded-md"></div>
+                  <div className="space-y-2">
+                    <div className="h-3 w-full bg-gray-100 rounded-md"></div>
+                    <div className="h-3 w-full bg-gray-100 rounded-md"></div>
+                    <div className="h-3 w-3/4 bg-gray-100 rounded-md"></div>
+                  </div>
+                  
+                  <div className="h-4 w-24 bg-gray-200 rounded-md mt-6"></div>
+                  <div className="space-y-2">
+                    <div className="h-3 w-full bg-gray-100 rounded-md"></div>
+                    <div className="h-3 w-full bg-gray-100 rounded-md"></div>
+                  </div>
+                  
+                  <div className="h-4 w-20 bg-gray-200 rounded-md mt-6"></div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="h-3 w-full bg-gray-100 rounded-md"></div>
+                    <div className="h-3 w-full bg-gray-100 rounded-md"></div>
+                    <div className="h-3 w-full bg-gray-100 rounded-md"></div>
+                    <div className="h-3 w-full bg-gray-100 rounded-md"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>

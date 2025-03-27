@@ -68,7 +68,7 @@ const ResumeViewer: React.FC<ResumeViewerProps> = ({
       const line = lines[i].trim();
       
       if (!line) {
-        formattedLines.push(<div key={`empty-${i}`} className="h-4"></div>);
+        formattedLines.push(<div key={`empty-${i}`} className="h-3"></div>); // Reduced empty space
         continue;
       }
       
@@ -86,6 +86,21 @@ const ResumeViewer: React.FC<ResumeViewerProps> = ({
         indentLevel = parseInt(indentMatch[1]);
       }
       
+      // Special case: Check for SKILLS as a standalone word or at the end of a line
+      if (line === "SKILLS" || line.endsWith(" SKILLS") || 
+          (line.includes("<HEADER>") && line.includes("SKILLS"))) {
+        seenFirstHeader = true;
+        formattedLines.push(
+          <div 
+            key={`header-skills-${i}`} 
+            className="text-base font-bold mt-4 mb-1 text-gray-800 border-b border-gray-300 pb-1"
+          >
+            SKILLS
+          </div>
+        );
+        continue;
+      }
+      
       // Check for headers (all caps)
       const isHeader = line.includes('<HEADER>') || 
                     (line === line.toUpperCase() && line.length > 2 && line.length <= 30);
@@ -100,7 +115,7 @@ const ResumeViewer: React.FC<ResumeViewerProps> = ({
       // Handle name (first line)
       if (!nameProcessed) {
         formattedLines.push(
-          <div key="name" className="text-xl font-bold text-center mb-1">
+          <div key="name" className="text-lg font-bold text-center mb-1">
             {cleanLine}
           </div>
         );
@@ -117,7 +132,7 @@ const ResumeViewer: React.FC<ResumeViewerProps> = ({
             lines[i+1].includes('<HEADER>') || 
             lines[i+1].toUpperCase() === lines[i+1]) {
           formattedLines.push(
-            <div key="contact-info" className="text-sm text-gray-600 text-center mb-4">
+            <div key="contact-info" className="text-xs text-gray-600 text-center mb-3">
               {contactInfoLines.join(' • ')}
             </div>
           );
@@ -140,7 +155,7 @@ const ResumeViewer: React.FC<ResumeViewerProps> = ({
         formattedLines.push(
           <div 
             key={`header-${i}`} 
-            className="text-lg font-bold mt-5 mb-2 text-gray-800 border-b border-gray-300 pb-1"
+            className="text-base font-bold mt-4 mb-1 text-gray-800 border-b border-gray-300 pb-1"
           >
             {headerText}
           </div>
@@ -162,9 +177,9 @@ const ResumeViewer: React.FC<ResumeViewerProps> = ({
           const projectDate = parts[1].trim();
           
           formattedLines.push(
-            <div key={`project-${i}`} className="flex justify-between items-center mt-4 mb-1">
+            <div key={`project-${i}`} className="flex justify-between items-center mt-3 mb-1">
               <span className="font-semibold text-gray-700">{projectTitle}</span>
-              <span className="text-sm text-gray-600 italic">{projectDate}</span>
+              <span className="text-xs text-gray-600 italic">{projectDate}</span>
             </div>
           );
           continue;
@@ -181,7 +196,7 @@ const ResumeViewer: React.FC<ResumeViewerProps> = ({
         formattedLines.push(
           <div 
             key={`subheader-${i}`} 
-            className="font-semibold mt-3 mb-1 text-gray-700"
+            className="font-semibold mt-2 mb-1 text-gray-700"
           >
             <span>{displayLine}</span>
           </div>
@@ -194,7 +209,7 @@ const ResumeViewer: React.FC<ResumeViewerProps> = ({
         formattedLines.push(
           <div 
             key={`company-${i}`}
-            className="font-semibold mt-4 mb-1 text-gray-800"
+            className="font-semibold mt-3 mb-1 text-gray-800"
           >
             {cleanLine}
           </div>
@@ -208,7 +223,7 @@ const ResumeViewer: React.FC<ResumeViewerProps> = ({
         formattedLines.push(
           <div
             key={`position-${i}`}
-            className="mb-2"
+            className="mb-1 text-sm"
           >
             {cleanLine}
           </div>
@@ -220,7 +235,7 @@ const ResumeViewer: React.FC<ResumeViewerProps> = ({
       if (isBulletPoint) {
         const bulletText = cleanLine.substring(1).trim();
         formattedLines.push(
-          <div key={`bullet-${i}`} className="pl-5 relative my-1 text-sm">
+          <div key={`bullet-${i}`} className="pl-4 relative my-1 text-xs">
             <span className="absolute left-0">{cleanLine.charAt(0)}</span>
             <span>{bulletText}</span>
           </div>
@@ -233,8 +248,8 @@ const ResumeViewer: React.FC<ResumeViewerProps> = ({
         formattedLines.push(
           <div 
             key={`indent-${i}`} 
-            className="text-sm my-1" 
-            style={{ marginLeft: `${indentLevel * 16}px` }}
+            className="text-xs my-1" 
+            style={{ marginLeft: `${indentLevel * 12}px` }}
           >
             {cleanLine}
           </div>
@@ -244,7 +259,7 @@ const ResumeViewer: React.FC<ResumeViewerProps> = ({
       
       // Regular text
       formattedLines.push(
-        <div key={`text-${i}`} className="my-1 text-sm">
+        <div key={`text-${i}`} className="my-1 text-xs">
           {cleanLine}
         </div>
       );
@@ -317,10 +332,10 @@ const ResumeViewer: React.FC<ResumeViewerProps> = ({
             height: pageDimensions.height,
             maxHeight: maxHeight,
             overflow: 'auto',
-            padding: '0.75in',
+            padding: '0.5in',
             fontFamily: 'Arial, sans-serif',
-            fontSize: '12px',
-            lineHeight: '1.3',
+            fontSize: '11px',
+            lineHeight: '1.2',
             position: 'relative'
           }}
         >

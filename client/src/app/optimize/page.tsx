@@ -621,6 +621,11 @@ export default function OptimizePage() {
                         >
                           Start Over
                         </Button>
+                        <Link href="/resume-builder">
+                          <Button>
+                            Try our Resume Builder
+                          </Button>
+                        </Link>
                       </CardFooter>
                     </div>
                   </CardContent>

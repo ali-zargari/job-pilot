@@ -8,4 +8,6 @@ declare module 'pdf-parse' {
   }>;
   
   export = pdfParse;
-} 
+}
+
+declare module 'docx-parser'; 

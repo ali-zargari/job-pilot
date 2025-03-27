@@ -1,63 +1,41 @@
-import * as React from 'react';
+import React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
+  "inline-flex items-center rounded-full px-3 py-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
   {
     variants: {
       variant: {
-        default: 'bg-primary-100 text-primary-800',
-        secondary: 'bg-secondary-100 text-secondary-800',
-        success: 'bg-success-100 text-success-800',
-        danger: 'bg-danger-100 text-danger-800',
-        warning: 'bg-warning-100 text-warning-800',
-        info: 'bg-blue-100 text-blue-800',
-        outline: 'text-gray-900 border border-gray-200',
-        critical: 'bg-danger-500 text-white font-semibold',
-        minor: 'bg-gray-100 text-gray-800',
-        medium: 'bg-warning-100 text-warning-800',
+        default: "bg-primary-600 text-white hover:bg-primary-700",
+        primary: "bg-primary-600 text-white hover:bg-primary-700",
+        outline: "bg-transparent text-gray-600 border border-gray-300 hover:bg-gray-100",
+        secondary: "bg-secondary-600 text-white hover:bg-secondary-700",
+        destructive: "bg-danger-600 text-white hover:bg-danger-700",
+        danger: "bg-danger-600 text-white hover:bg-danger-700",
+        success: "bg-success-600 text-white hover:bg-success-700",
+        warning: "bg-warning-600 text-white hover:bg-warning-700",
       },
       size: {
-        default: 'h-6',
-        sm: 'h-5 text-[10px]',
-        lg: 'h-7 text-sm',
-      },
-      withDot: {
-        true: 'pl-1.5',
+        default: "text-sm",
+        sm: "text-xs px-2.5 py-0.5",
+        lg: "text-base px-4 py-1.5",
       },
     },
     defaultVariants: {
-      variant: 'default',
-      size: 'default',
-      withDot: false,
+      variant: "default",
+      size: "default",
     },
   }
 );
 
 export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof badgeVariants> {
-  dotColor?: string;
-}
+    VariantProps<typeof badgeVariants> {}
 
-function Badge({
-  className,
-  variant,
-  size,
-  withDot,
-  dotColor,
-  ...props
-}: BadgeProps) {
+function Badge({ className, variant, size, ...props }: BadgeProps) {
   return (
-    <div className={cn(badgeVariants({ variant, size, withDot, className }))}>
-      {withDot && (
-        <div
-          className={cn('mr-1 h-2 w-2 rounded-full', dotColor ? dotColor : 'bg-current')}
-        />
-      )}
-      {props.children}
-    </div>
+    <div className={cn(badgeVariants({ variant, size }), className)} {...props} />
   );
 }
 

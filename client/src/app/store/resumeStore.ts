@@ -1,4 +1,7 @@
 import { create } from 'zustand';
+import { ResumeData } from '@/types/resume';
+import { parseResumeText, resumeDataToText } from '@/lib/resumeParser';
+import { getDefaultDesignOptions } from '@/lib/resumeTemplates';
 
 export interface ResumeResult {
   score: number;
@@ -37,6 +40,13 @@ interface ResumeState {
   error: string | null;
   currentView: 'original' | 'rule_based' | 'optimized';
   
+  // New template-based fields
+  resumeData: ResumeData | null;
+  originalResumeData: ResumeData | null;
+  selectedTemplate: string;
+  designOptions: any;
+  activeSection: string;
+  
   // Actions
   setFile: (file: File | null) => void;
   setJobDescription: (description: string) => void;
@@ -44,8 +54,33 @@ interface ResumeState {
   setResult: (result: ResumeResult) => void;
   setError: (error: string | null) => void;
   setCurrentView: (view: 'original' | 'rule_based' | 'optimized') => void;
+  
+  // New template-based actions
+  setResumeData: (data: ResumeData) => void;
+  setOriginalResumeData: (data: ResumeData) => void;
+  setSelectedTemplate: (templateId: string) => void;
+  setDesignOptions: (options: any) => void;
+  setActiveSection: (section: string) => void;
+  updateResumeData: (data: Partial<ResumeData>) => void;
+  
   reset: () => void;
 }
+
+// Default empty resume data structure
+const getEmptyResumeData = (): ResumeData => ({
+  contactInfo: {
+    name: '',
+    email: '',
+    phone: '',
+    location: '',
+  },
+  summary: '',
+  experience: [],
+  education: [],
+  skills: {
+    categories: []
+  }
+});
 
 export const useResumeStore = create<ResumeState>((set) => ({
   file: null,
@@ -55,19 +90,73 @@ export const useResumeStore = create<ResumeState>((set) => ({
   error: null,
   currentView: 'optimized',
   
+  // Template-based state
+  resumeData: null,
+  originalResumeData: null,
+  selectedTemplate: 'modern',
+  designOptions: getDefaultDesignOptions('modern'),
+  activeSection: 'contactInfo',
+  
   // Actions
   setFile: (file: File | null) => set({ file }),
+  
   setJobDescription: (jobDescription: string) => set({ jobDescription }),
+  
   startOptimization: () => set({ isLoading: true, error: null }),
-  setResult: (result: ResumeResult) => set({ result, isLoading: false }),
+  
+  setResult: (result: ResumeResult) => {
+    // Also parse text content to structured data
+    const resumeData = parseResumeText(result.optimized);
+    const originalResumeData = parseResumeText(result.original);
+    
+    set({ 
+      result, 
+      isLoading: false,
+      resumeData,
+      originalResumeData
+    });
+  },
+  
   setError: (error: string | null) => set({ error, isLoading: false }),
+  
   setCurrentView: (currentView) => set({ currentView }),
+  
+  // Template-based actions
+  setResumeData: (resumeData: ResumeData) => set({ resumeData }),
+  
+  setOriginalResumeData: (originalResumeData: ResumeData) => set({ originalResumeData }),
+  
+  setSelectedTemplate: (templateId: string) => {
+    const designOptions = getDefaultDesignOptions(templateId);
+    set({ 
+      selectedTemplate: templateId,
+      designOptions
+    });
+  },
+  
+  setDesignOptions: (options: any) => set({ designOptions: options }),
+  
+  setActiveSection: (activeSection: string) => set({ activeSection }),
+  
+  updateResumeData: (partialData: Partial<ResumeData>) => {
+    set((state) => ({
+      resumeData: state.resumeData 
+        ? { ...state.resumeData, ...partialData } 
+        : { ...getEmptyResumeData(), ...partialData }
+    }));
+  },
+  
   reset: () => set({
     file: null,
     jobDescription: '',
     isLoading: false,
     result: null,
     error: null,
-    currentView: 'optimized'
+    currentView: 'optimized',
+    resumeData: null,
+    originalResumeData: null,
+    selectedTemplate: 'modern',
+    designOptions: getDefaultDesignOptions('modern'),
+    activeSection: 'contactInfo'
   })
 })); 
